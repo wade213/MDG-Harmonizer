@@ -1,0 +1,216 @@
+---
+description: MDG-Harmonizer 各阶段子任务的标准 prompt 模板（按需 attach 给对应 agent）
+alwaysApply: false
+---
+
+# MDG-Harmonizer Agent 任务模板
+
+> 使用方式：开新 agent 时把对应任务节复制为 prompt，或用 `@agent-tasks` 引用本文件。
+> 项目背景已由 `mdg-harmonizer.mdc`（alwaysApply）注入，**不需要重复粘贴**。
+
+---
+
+## 阶段 1：四个独立任务（可并行）
+
+### 任务 A：CDP-Net 紧凑退化先验编码器
+
+实现 **CDP-Net (Compact Degradation Prior Network)**，替换原 `models/degradation_prior.py` 中的 `DegradationPrior`。
+
+**要求：**
+1. 新建 `models/cdp_net.py`，定义类 `CDPNet`：
+   - 输入：`degraded_image (B,3,H,W)` + `foreground_mask (B,1,H,W)`，按通道拼接为 `(B,4,H,W)`
+   - 主干：4 层卷积 + GroupNorm + SiLU，每层下采样 2×，通道数 [16, 32, 64, 128]
+   - 全局平均池化 → 128 维特征
+   - **多任务解耦输出头**：
+     - `head_brightness`: Linear(128→1)
+     - `head_color_temp`: Linear(128→1)
+     - `head_saturation`: Linear(128→1)
+     - `head_noise_level`: Linear(128→1)
+     - `head_general_embed`: Linear(128→28)
+   - 输出：`(deg_vector (B, 32), aux_dict)`，其中 `aux_dict` 含四个解耦分量便于辅助监督
+2. 兼容接口：`forward(degraded_image, foreground_mask)`
+3. 文件末尾加单元测试，打印参数量、输出 shape、四个解耦头 shape
+
+**约束：**
+- 总参数 < 1 M
+- 必须支持 fp16（autocast 下不出 NaN）
+- 不要修改原 `degradation_prior.py`（保留作 baseline）
+
+**验收：**
+- `python models/cdp_net.py` 跑通
+- 输出 `(B, 32)` 张量
+- 参数量打印 < 1 M
+
+---
+
+### 任务 B：AFM 自适应调制模块
+
+实现 **AFM (Adaptive Feature Modulation)**，替代原 `FiLMLayer` 的简单仿射调制。
+
+**要求：**
+1. 新建 `models/afm.py`，定义类 `AFM`：
+   - 输入：`features (B, C, H, W)` + `deg_vec (B, 32)`
+   - 把 `deg_vec` 通过 MLP 扩展成 K=4 个 token，每个 token 维度 = C/4
+   - 把 `features` reshape 成 `(B, H*W, C)`
+   - **单头轻量 cross-attention**（query=features, key/value=tokens），降维投影 dim=C/4
+   - **同时保留 FiLM shortcut**：`gamma * x + beta`
+   - 最终输出 = features + cross_attn_out + film_out（残差）
+2. 用 `torch.utils.checkpoint` 包一层节省显存
+3. 单元测试：输入 `(2, 64, 32, 32)` + `(2, 32)`，打印输出 shape 和参数量
+
+**约束：**
+- 单实例参数 < 0.5 M
+- 必须支持 fp16
+- 不要修改原 `FiLMLayer`（保留作 baseline）
+
+**验收：**
+- `python models/afm.py` 跑通
+- 输入输出 shape 一致
+- 参数量 < 0.5 M
+
+---
+
+### 任务 C：FB-Loss 前景感知复合损失
+
+实现 **FB-Loss (Foreground-Boundary Aware Loss)**，新建 `models/fb_loss.py`。
+
+**要求：**
+1. 实现 `FBLoss` 类，`forward(pred, gt, mask) -> (total_loss, loss_dict)`：
+   - **L1**：全局 L1
+   - **L_fg_weighted**：前景区域 L1，权重 ×3
+   - **L_boundary**：用 `F.max_pool2d` 实现 dilate（不引入新依赖），`dilated - eroded` 得到边界带，权重 ×5
+   - **L_lpips**：`lpips.LPIPS(net='alex')`（必须 frozen，`requires_grad=False`）
+   - **L_fft**：对 `pred`/`gt` 做 `torch.fft.rfft2`，去掉低频后 L1
+2. 默认权重 `λ=[1.0, 2.0, 3.0, 0.1, 0.5]`，构造函数允许传入
+3. 返回的 `loss_dict` 含 5 个分项（用于 tensorboard）
+4. 单元测试：随机 `(2,3,256,256)` 张量，打印各分项 loss
+
+**约束：**
+- LPIPS 必须 frozen
+- 必须支持 fp16
+- 不要修改原 `models/loss.py` / `losses.py`
+
+**验收：**
+- 单元测试跑通，各分项是合理正数
+- LPIPS 参数 `requires_grad=False`
+
+---
+
+### 任务 D：DPM-Solver++ 采样器接入
+
+把 HCDM 的采样从 DDPM 1000 步加速为 **DPM-Solver++（25 步）**。
+
+**要求：**
+1. 安装 `dpm-solver-pytorch` 或复制官方实现到 `models/dpm_solver.py`
+2. 阅读 `models/gaussian_diffusion.py` 和 `models/respace.py` 定位采样入口
+3. 新增方法 `sample_dpm_solver(model, x_T, condition, steps=25, order=2)`：
+   - 把现有 noise schedule 转成 `NoiseScheduleVP`
+   - 包装 `model_fn(x, t, cond)` 适配 HCDM U-Net 签名
+4. 在 `run.py` test 流程加 flag `--sampler dpm`（默认 ddpm，向后兼容）
+5. 写独立测试 `test_dpm_speed.py`：测试集前 5 张，分别跑 DDPM-1000 和 DPM-Solver++-25，打印平均推理时间和 PSNR
+
+**约束：**
+- 不破坏原 `p_sample_loop`，只能新增不能改
+- 不修改训练流程
+
+**验收：**
+- `python test_dpm_speed.py` 跑通
+- DPM-Solver++ 25 步比 DDPM 1000 步快至少 20×
+- PSNR 下降 < 0.5 dB
+
+---
+
+## 阶段 2：整合与实验（依赖阶段 1 完成）
+
+### 任务 E：主训练流程整合（**关键任务，建议你亲自盯**）
+
+把 CDP-Net、AFM、FB-Loss 整合进 HCDM 训练流程，并实现「冻结主干 + 只训小模块」。
+
+**前提：** 任务 A、B、C 已完成。
+
+**要求：**
+1. 模型构造处：
+   - `CDPNet` 替换 `DegradationPrior`，`degradation_dim=8 → 32`
+   - 各 scale 的 `FiLMLayer` 替换为 `AFM`（保留 FiLM 路径，用 config 开关 `use_afm`）
+   - 损失换成 `FBLoss`（用开关 `use_fb_loss`）
+2. **冻结主干**：
+   - 原 HCDM U-Net 所有参数 `requires_grad=False`
+   - 加载预训练权重 `strict=False`
+   - optimizer 只管 CDP-Net、AFM、FBLoss 可学习参数
+3. config 加：`freeze_backbone: true`、`use_amp: true`、`gradient_accumulation_steps: 4`、`batch_size: 4`
+4. 训练循环加 `autocast()` + `GradScaler`
+5. tensorboard 记录 5 个 loss 分项 + 验证 PSNR/SSIM
+
+**验收：**
+- `python run.py -p train -c config/harmonization_day2night_modified_allinone.json` 跑起来
+- 显存占用 < 5 GB（`nvidia-smi`）
+- tensorboard 看到 5 个 loss 分项
+- 1 epoch < 20 分钟
+
+---
+
+### 任务 F：消融实验脚本
+
+写 `run_ablations.py`，自动跑 4 组：
+
+1. **Full**：CDP-Net + AFM + FB-Loss
+2. **w/o CDP-Net**：用原 `DegradationPrior`
+3. **w/o AFM**：用原 `FiLMLayer`
+4. **w/o FB-Loss**：用原损失
+
+**要求：**
+- 每组训 20 epoch，相同随机种子
+- 自动调 `evaluate.py`，把 MSE/PSNR/SSIM/fMSE/fPSNR/fSSIM 写入 `ablation_results.csv`
+- checkpoint 保存到 `experiments/ablation_<name>/`
+- 顶部用 list of dict 配置实验，便于增减
+- 加 try/except，单组失败不影响其它
+
+**验收：**
+- 跑完 4 组
+- 生成 `ablation_results.csv`，列：`experiment_name, MSE, PSNR, SSIM, fMSE, fPSNR, fSSIM, train_time`
+
+---
+
+### 任务 G：可视化与画图
+
+为论文准备图表，全部输出到 `figs/`。
+
+1. **`tools/plot_results.py`**：读 tensorboard，画 loss/PSNR 曲线
+   - 论文风格（白底、Times New Roman、tight_layout）
+   - 输出 `figs/loss_curve.pdf`、`figs/psnr_curve.pdf`
+2. **`tools/visual_compare.py`**：测试集随机 8 张
+   - 4 列：input / HCDM 原结果 / MDG-Harmonizer 结果 / GT
+   - 8×4 grid → `figs/visual_compare.pdf`
+3. **`tools/speed_table.py`**：基于任务 D 的输出生成 LaTeX 表
+   - 列：Sampler / Steps / Time(ms) / PSNR
+   - 输出 `figs/speed_table.tex`
+
+**验收：** 所有 PDF/TEX 生成，图风格一致。
+
+---
+
+### 任务 H（可选）：论文 LaTeX 骨架
+
+在 `paper/` 下生成本科毕设 LaTeX 骨架（**只搭框架，不写内容**）。
+
+**结构：**
+- 摘要（中英）
+- 引言
+- 相关工作（图像和谐化、扩散模型、退化先验）
+- 方法 MDG-Harmonizer（CDP-Net / AFM / FB-Loss / DPM-Solver++ 四小节）
+- 实验（数据集、实现细节、主结果、消融、推理速度、可视化）
+- 结论与展望
+- 参考文献（bibtex 预填 HCDM、DDPM、DPM-Solver、LPIPS、Restormer、FiLM）
+
+每章一两句 placeholder，标 `% TODO`。`paper/figs/` 引用任务 G 的图。
+
+**验收：** `pdflatex paper/main.tex` 能编译出 PDF。
+
+---
+
+## 执行建议
+
+1. **Day 8 上午**：4 个 agent 并行开任务 A、B、C、D
+2. **Day 11–12**：你亲自盯任务 E（最容易出问题）
+3. **Day 13–15**：任务 F 挂着跑，同时开 G、H
+4. **Day 16+**：写论文，用 canvas 看实验结果

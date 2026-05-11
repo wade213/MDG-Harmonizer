@@ -1,0 +1,45 @@
+# Python virtual environment
+.venv/
+
+# Node.js dependencies
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE
+.idea/
+.vscode/
+
+# Datasets (large files, download separately)
+Hday2night/
+TestData/
+pretrained_model/
+
+# Experiment outputs (large, generated)
+experiments/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Environment
+.env
+*.env.local
+
+# Claude Code internal
+.claude/
+
+# Temp files
+Untitled

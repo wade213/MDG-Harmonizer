@@ -1,0 +1,98 @@
+---
+description: MDG-Harmonizer 本科毕设项目的全局上下文与约束（基于 HCDM 改进）
+alwaysApply: true
+---
+
+# MDG-Harmonizer 项目规则
+
+## 项目背景
+
+- **基础**：在 [HCDM (Image Harmonization in Complex Degradation Scenes)](README.md) 仓库基础上做的本科毕业设计
+- **框架名**：**MDG-Harmonizer**
+- **目标**：在 HCDM 基础上提升前景区域指标 + 加速推理，作为本科毕设交付
+
+## 硬件与训练约束（**严格遵守**）
+
+- **GPU**：NVIDIA RTX 3050 Ti（4–6 GB VRAM），显存极度紧张
+- **必须使用**：
+  - `torch.cuda.amp.autocast()` + `GradScaler`（fp16 混合精度）
+  - 梯度累积（推荐 `batch_size=4` + `accum_steps=4`，等效 batch=16）
+  - **不开 EMA**（省显存）
+- **训练分辨率**：256×256，禁止 ≥ 512
+- **训练策略**：**冻结 HCDM 预训练 U-Net 主干**，仅训练新加的小模块（CDP-Net、AFM）
+  - 加载 HCDM 预训练权重时使用 `strict=False`
+  - 只对新模块的参数构造 optimizer
+
+## 数据集
+
+- **只使用 D-Hday2night 子集**（311 train / 133 test）
+- 不要去跑其它三个子集（D-HCOCO、D-HAdobe5k、D-HFlickr）——训练时间太长
+
+## 三个核心创新点（命名规范）
+
+| 缩写 | 全称 | 替换的原模块 | 参数预算 |
+|---|---|---|---|
+| **CDP-Net** | Compact Degradation Prior Network | `models/degradation_prior.py` 中的 `DegradationPrior`（GAP+GMP+8 维） | < 1 M |
+| **AFM** | Adaptive Feature Modulation | 原 `FiLMLayer` 的简单仿射调制 | < 0.5 M / 实例 |
+| **FB-Loss** | Foreground-Boundary Aware Loss | 原 `models/loss.py` / `losses.py` 中的损失 | 不增加可训练参数 |
+
+加速推理使用 **DPM-Solver++（25 步）**，替换原 DDPM 1000 步采样。
+
+## 修改范围
+
+### 可以修改 / 新增
+
+- `models/cdp_net.py`（新建）
+- `models/afm.py`（新建）
+- `models/fb_loss.py`（新建，或追加到 `models/losses.py`）
+- `models/dpm_solver.py`（新建，加速采样器）
+- `models/__init__.py`（导出新模块）
+- U-Net 调用处（`models/guided_diffusion_modules/unet_modified_with_est.py` 等）：把 FiLM 替换为 AFM
+- 训练入口 `run.py` 和模型类（`models/model_rihd.py` 等）：加冻结主干逻辑、AMP、配置开关
+- `config/` 下相关 JSON：加 `freeze_backbone`、`use_afm`、`use_fb_loss`、`use_amp` 等开关
+
+### 严禁修改
+
+- `.venv/` 下的任何文件
+- `experiments/` 目录下的历史实验记录
+- 原 `models/degradation_prior.py` 的 `DegradationPrior` 与 `FiLMLayer`（**保留作为 ablation baseline**，新增类放新文件）
+- `models/loss.py` / `models/losses.py` 中已有的损失类（保留作为 baseline）
+
+## 全局编码约束
+
+- 所有新模块必须支持 fp16，单元测试需在 `torch.cuda.amp.autocast()` 下验证不出 NaN
+- 新模块单独参数量 < 5 M（轻量化是核心卖点）
+- 每个新文件结尾加 `if __name__ == "__main__"` 单元测试，打印参数量 + 输出 shape
+- 不要 `pip install` 重型新依赖（>500 MB）；常用如 `lpips`、`dpm-solver-pytorch` 可以装
+- 命名风格：类名 PascalCase（`CDPNet`、`AFM`、`FBLoss`），文件名 snake_case
+- 注释优先解释 *为什么*，不要写 "import torch" 这种废话注释
+
+## 运行环境（**所有 Python / pip 命令必须遵守**）
+
+- **项目根目录**：`D:\HCDM-master\HCDM-master\`（不是外层的 `D:\HCDM-master\`，外层只是 workspace 容器）
+- **虚拟环境**：`D:\HCDM-master\HCDM-master\.venv\`（已装好 torch、torchvision 等全部依赖）
+- **绝对不要用系统 Python**（`E:\Program Files\python.exe` 之类），否则会找不到 torch
+- **执行 Python 命令的两种方式（任选）**：
+  1. **显式调用 venv 的 python**（推荐给 agent 用，无需激活，幂等）：
+     ```powershell
+     cd D:\HCDM-master\HCDM-master
+     .\.venv\Scripts\python.exe run.py -p train -c config/harmonization_day2night_modified_allinone.json
+     ```
+  2. **先激活 venv 再用 `python`**（推荐给人工交互）：
+     ```powershell
+     cd D:\HCDM-master\HCDM-master
+     .\.venv\Scripts\Activate.ps1
+     python run.py -p train -c config/harmonization_day2night_modified_allinone.json
+     ```
+- **pip install 同理**：必须用 `.\.venv\Scripts\pip.exe install xxx`，不要直接 `pip install`
+- 若 PowerShell 拒绝执行 `Activate.ps1`，先跑 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
+
+## 实验对比基线
+
+所有消融实验需对比：
+1. **Full**：CDP-Net + AFM + FB-Loss
+2. **w/o CDP-Net**：用原 `DegradationPrior`
+3. **w/o AFM**：用原 `FiLMLayer`
+4. **w/o FB-Loss**：用原损失
+
+报告指标：MSE / PSNR / SSIM / **fMSE / fPSNR / fSSIM**（前景指标是论文卖点，必报）。

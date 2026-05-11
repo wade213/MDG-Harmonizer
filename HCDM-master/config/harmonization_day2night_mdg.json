@@ -1,0 +1,199 @@
+{
+    "name": "mdg_harmonizer_day2night",
+    "gpu_ids": [0],
+    "seed": 42,
+    "finetune_norm": false,
+
+    "path": {
+        "base_dir": "experiments",
+        "code": "code",
+        "tb_logger": "tb_logger",
+        "results": "results",
+        "checkpoint": "checkpoint",
+        // Reuse baseline 770-epoch pretrained weights. MDGTrainer's
+        // pretrained_label="Network" makes load_network look for
+        // <resume>_Network.pth (not _MDGNetwork.pth). strict=False
+        // skips the new keys: cdp_net / afm_bottleneck / fb_loss.
+        "resume_state": "pretrained_model/checkpoint/1D_embed/770"
+    },
+
+    "datasets": {
+        "train": {
+            "which_dataset": {
+                "name": ["data.dataset", "HarmonizationTrainDataset"],
+                "args": {
+                    "data_root": "./Hday2night/composite_images_train/",
+                    "data_len": -1,
+                    "mask_config": {
+                        "mask_mode": "hybrid"
+                    }
+                }
+            },
+            "dataloader": {
+                "validation_split": 2,
+                "args": {
+                    // 4GB VRAM budget: fp16 autocast + freeze backbone fits batch=2 comfortably
+                    // (dry-run shows peak 1.19GB). Could push to 4 but keep stable.
+                    "batch_size": 2,
+                    "num_workers": 2,
+                    "shuffle": true,
+                    "pin_memory": true,
+                    "drop_last": true
+                },
+                "val_args": {
+                    "batch_size": 1,
+                    "num_workers": 2,
+                    "shuffle": false,
+                    "pin_memory": true,
+                    "drop_last": false
+                }
+            }
+        },
+        "test": {
+            "which_dataset": {
+                "name": "HarmonizationTestDataset",
+                "args": {
+                    "data_root": "./TestData/Hday2night/composite_images_test/",
+                    "mask_config": {
+                        "mask_mode": "center"
+                    }
+                }
+            },
+            "dataloader": {
+                "args": {
+                    "batch_size": 1,
+                    "num_workers": 2,
+                    "pin_memory": true
+                }
+            }
+        }
+    },
+
+    "model": {
+        "which_model": {
+            // MDGTrainer = RIHD + AMP + grad accum + pretrained_label + loss breakdown
+            "name": ["models.model_mdg", "MDGTrainer"],
+            "args": {
+                "sample_num": 8,
+                "task": "inpainting",
+                // EMA disabled: 4GB budget cant afford the +250MB; freeze backbone
+                // makes most params constant anyway, EMA gives near-zero benefit.
+
+                // ===== MDGTrainer opt-in fields =====
+                "use_amp": true,
+                "gradient_accumulation_steps": 4,
+                "pretrained_label": "Network",
+                "log_loss_breakdown": true
+            }
+        },
+        "which_networks": [
+            {
+                "name": ["models.network_mdg", "MDGNetwork"],
+                "args": {
+                    "init_type": "kaiming",
+                    "freeze_backbone": true,
+                    "deg_dim": 32,
+
+                    // Same UNet config as baseline guided_diffusion. MDGUNet adds
+                    // one AFM at the bottleneck; everything else is identical so
+                    // pretrained weights load with zero backbone-key mismatch.
+                    "unet": {
+                        "in_channel": 6,
+                        "out_channel": 3,
+                        "inner_channel": 64,
+                        "channel_mults": [1, 2, 4, 8],
+                        "attn_res": [16],
+                        "num_head_channels": 32,
+                        "res_blocks": 2,
+                        "dropout": 0.2,
+                        "image_size": 256,
+                        // Grad checkpoint on every encoder/decoder ResBlock for VRAM
+                        "use_checkpoint": true,
+                        "use_fp16": true
+                    },
+
+                    "cdp": {
+                        "in_channels": 4,
+                        "backbone_channels": [16, 32, 64, 128],
+                        "embed_dim": 28
+                    },
+
+                    "afm": {
+                        "num_tokens": 4,
+                        "use_checkpoint": true
+                    },
+
+                    "fb_loss": {
+                        // LPIPS AlexNet weights ~5MB (verify cached at
+                        // ~/.cache/torch/hub/checkpoints/alexnet-*.pth)
+                        "use_lpips": true,
+                        // Order: [global_L1, fg_L1*3, boundary_L1*5, LPIPS, FFT_L1]
+                        "weights": [1.0, 3.0, 5.0, 0.1, 0.5]
+                    },
+
+                    "loss_weights": {
+                        // Phase 1: noise loss dominates, FB-Loss is auxiliary.
+                        // Tune up fb to e.g. 1.0 for fine-tuning later.
+                        "noise": 1.0,
+                        "fb": 0.3
+                    },
+
+                    "beta_schedule": {
+                        "train": {
+                            "schedule": "linear",
+                            "n_timestep": 2000,
+                            "linear_start": 1e-6,
+                            "linear_end": 0.01
+                        },
+                        "test": {
+                            "schedule": "linear",
+                            "n_timestep": 1000,
+                            "linear_start": 1e-4,
+                            "linear_end": 0.09
+                        }
+                    }
+                }
+            }
+        ],
+
+        "which_optimizers": [
+            // Only ~0.6M trainable params after freeze; can use larger lr (5e-4) than
+            // baseline (5e-5) since modules are smaller and benefit from faster convergence.
+            { "name": "Adam", "args": { "lr": 5e-4, "weight_decay": 0 } }
+        ],
+
+        "which_lr_schedulers": [
+            { "name": "CosineAnnealingLR", "args": { "T_max": 30 } }
+        ],
+
+        "which_losses": [
+            // l1_loss is the multi-scale noise loss base; FB-Loss is constructed
+            // inside MDGNetwork directly, not via define_loss.
+            "l1_loss"
+        ],
+
+        "which_metrics": [
+            "mae"
+        ]
+    },
+
+    "train": {
+        // 30 epoch * 156 iter/epoch * ~0.4s/iter = ~30 min on dummy data;
+        // real training with dataloader IO + EMA-skipped + tensorboard est. 1-1.5h.
+        "n_epoch": 30,
+        "n_iter": 1e6,
+        // Validation is slow (1000-step DDPM sampling); run sparingly.
+        "val_epoch": 10,
+        "save_checkpoint_epoch": 5,
+        // batch_size=2, iter += 2; log_iter=20 means roughly every 10 batches.
+        "log_iter": 20,
+        "tensorboard": true
+    },
+
+    "debug": {
+        "val_epoch": 1,
+        "save_checkpoint_epoch": 1,
+        "log_iter": 2,
+        "debug_split": 50
+    }
+}
