@@ -82,8 +82,8 @@ if __name__ == '__main__':
     parser.add_argument('-gpu', '--gpu_ids', type=str, default=None)
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('-P', '--port', default='21012', type=str)
-    parser.add_argument('--sampler', type=str, choices=['ddpm', 'dpm'], default='ddpm',
-                        help='Sampling method: ddpm (1000 steps) or dpm (DPM-Solver++ 25 steps)')
+    parser.add_argument('--sampler', type=str, choices=['ddpm', 'ddim'], default='ddpm',
+                        help='Sampling method: ddpm (1000 steps) or ddim (DDIM 25 steps)')
 
     ''' parser configs '''
     args = parser.parse_args()

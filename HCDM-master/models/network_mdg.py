@@ -214,12 +214,15 @@ class MDGNetwork(BaseNetwork):
     # 冻结控制
     # ------------------------------------------------------------------
     def _freeze_backbone(self) -> None:
-        """冻结 ``denoise_fn`` 中除 AFM 之外的所有参数。
+        """冻结 ``denoise_fn`` 中除 AFM + 输出层之外的所有参数。
 
         4 GB VRAM 下连原 baseline 单 batch 训练都 OOM；MDG-Harmonizer 的核心
         是「冻结 ~63 M 主干，仅训 ~0.6 M 新模块」，使 optimizer state +
         activation 均能塞进显存。CDPNet 与 FBLoss 自身参数（LPIPS 已 frozen）
         不在此处理范围，本身就是可训练的。
+
+        输出层 (out / out_list) 始终可训练：它们是零初始化卷积，不解冻则
+        无 AFM 时（消融 C）前向输出恒为零，无法训练。
         """
         # 1) 整个 denoise_fn 先全部冻结
         for p in self.denoise_fn.parameters():
@@ -229,6 +232,12 @@ class MDGNetwork(BaseNetwork):
             if isinstance(module, AFM):
                 for p in module.parameters():
                     p.requires_grad = True
+        # 3) 输出层始终可训练（消融 C 无 AFM 时保证梯度流）
+        for p in self.denoise_fn.out.parameters():
+            p.requires_grad = True
+        for m in self.denoise_fn.out_list:
+            for p in m.parameters():
+                p.requires_grad = True
         # 3) 修复 frozen ResBlock / AttentionBlock 的 checkpoint 兼容性问题。
         #    自定义 ``CheckpointFunction.backward`` 调 ``torch.autograd.grad``
         #    会要求所有传入的 params 都 ``requires_grad=True``；冻结后会报
@@ -272,10 +281,6 @@ class MDGNetwork(BaseNetwork):
 
         n_res, n_attn = 0, 0
         for m in self.denoise_fn.modules():
-            # 仅当模块自身全部冻结才打补丁；带 AFM 的（middle_block 后续）不动。
-            all_frozen = all(not p.requires_grad for p in m.parameters())
-            if not all_frozen:
-                continue
             if isinstance(m, ResBlock):
                 m.forward = _safe_resblock_forward.__get__(m, type(m))
                 n_res += 1
@@ -469,6 +474,77 @@ class MDGNetwork(BaseNetwork):
         return y_t, ret_arr
 
     @torch.no_grad()
+    def restoration_ddim(
+        self,
+        y_cond: torch.Tensor,
+        y_t: Optional[torch.Tensor] = None,
+        y_0: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None,
+        sample_num: int = 8,
+        ddim_steps: int = 25,
+        eta: float = 0.0,
+    ):
+        """DDIM 风格多步跳转采样。
+
+        每步：预测噪声 → 反推 x_0 → 用 DDIM 公式算 x_s。
+        eta=0 确定性（最快），eta=1 加后验噪声。
+        """
+        b = y_cond.shape[0]
+        device = y_cond.device
+
+        deg_vec = self._compute_deg_vec(y_cond, mask)
+        x = _default(y_t, lambda: torch.randn_like(y_cond))
+
+        # 子采样时刻表（降序）
+        stride = max(1, self.num_timesteps // ddim_steps)
+        all_steps = list(range(self.num_timesteps - 1, -1, -1))
+        subsampled = [all_steps[i] for i in range(0, len(all_steps), stride)]
+        seen = set()
+        subsampled = [t for t in subsampled if t not in seen and not seen.add(t)]
+        if subsampled[-1] != 0:
+            subsampled.append(0)
+
+        sample_inter = max(len(subsampled) // sample_num, 1)
+
+        ret_arr = x
+        for idx, t_val in enumerate(subsampled[:-1]):
+            s_val = subsampled[idx + 1]
+
+            # 模型预测噪声
+            t = torch.full((b,), t_val, device=device, dtype=torch.long)
+            noise_level = _extract(self.gammas, t, x_shape=(1, 1)).to(device)
+            unet_input = torch.cat([y_cond, x], dim=1)
+            eps = self.denoise_fn(unet_input, noise_level, deg_vec=deg_vec)[-1]
+
+            # 反推 x_0: x_t = √γ_t · x_0 + √(1-γ_t) · ε
+            a_t = self.gammas[t_val]
+            a_s = self.gammas[s_val]
+            x_0 = (x - (1.0 - a_t).sqrt() * eps) / a_t.sqrt().clamp(min=1e-8)
+            x_0.clamp_(-1.0, 1.0)
+
+            # DDIM 跳转: x_s = √α̅_s · x_0 + √(1-α̅_s - σ²) · ε + σ · noise
+            # 其中 c² = (1-α̅_s)/(1-α̅_t) · (1-α̅_t/α̅_s),  σ = η · c
+            c_sq = ((1.0 - a_s) / (1.0 - a_t).clamp(min=1e-20)) * (
+                1.0 - a_t / a_s.clamp(min=1e-20)
+            )
+            c_sq = c_sq.clamp(min=0.0)
+            sigma = eta * c_sq.sqrt()
+            d_sq = (1.0 - a_s - c_sq).clamp(min=0.0)
+
+            if s_val > 0:
+                noise = torch.randn_like(x) if eta > 0 else torch.zeros_like(x)
+                x = a_s.sqrt() * x_0 + d_sq.sqrt() * eps + sigma * noise
+            else:
+                x = x_0
+
+            if mask is not None:
+                x = y_0 * (1.0 - mask) + mask * x
+            if idx % sample_inter == 0:
+                ret_arr = torch.cat([ret_arr, x], dim=0)
+
+        return x, ret_arr
+
+    @torch.no_grad()
     def restoration_dpm(
         self,
         y_cond: torch.Tensor,
@@ -478,53 +554,16 @@ class MDGNetwork(BaseNetwork):
         sample_num: int = 8,
         dpm_steps: int = 25,
         dpm_order: int = 2,
+        eta: float = 0.0,
     ):
-        """DPM-Solver++ 加速采样（替代 1000 步 DDPM）。
+        """DDIM 别名，保留接口兼容。
 
-        与 ``restoration()`` 接口一致，仅采样器不同。
-        推理速度：25 步 DPM-Solver++ ≈ 2.5 秒/图 vs 1000 步 DDPM ≈ 100 秒/图，
-        约 40× 加速。
-
-        Args:
-            y_cond:     条件图 (B,3,H,W)
-            y_t:        初始噪声，None 则随机生成
-            y_0:        GT 图（mask blending 用）
-            mask:       前景 mask
-            sample_num: 中间结果采样数（保持兼容，实际取固定间隔）
-            dpm_steps:  DPM-Solver++ 步数（默认 25）
-            dpm_order:  阶数（默认 2 = DPM-Solver++ 2M）
+        ``dpm_steps`` 映射为 ``ddim_steps``，``eta`` 直传。
         """
-        from .dpm_solver import dpm_solver_restoration
-
-        # CDPNet 只算一次（与原 restoration 一致）
-        deg_vec = self._compute_deg_vec(y_cond, mask)
-
-        y_t = _default(y_t, lambda: torch.randn_like(y_cond))
-
-        # DPM-Solver++ 核心采样
-        y_out, _ = dpm_solver_restoration(
-            denoise_fn=self.denoise_fn,
-            y_cond=y_cond,
-            alphas_cumprod=self.gammas.cpu().numpy(),
-            mask=mask,
-            y_t=y_t,
-            deg_vec=deg_vec,
-            steps=dpm_steps,
-            order=dpm_order,
-            progress=True,
+        return self.restoration_ddim(
+            y_cond=y_cond, y_t=y_t, y_0=y_0, mask=mask,
+            sample_num=sample_num, ddim_steps=dpm_steps, eta=eta,
         )
-
-        # Mask blending（与原 restoration 一致）
-        if mask is not None:
-            y_out = y_0 * (1.0 - mask) + mask * y_out
-
-        # 构造 ret_arr：取 sample_num 个均匀间隔的中间结果
-        # DPM-Solver 无中间步骤，用 y_out 复制模拟
-        ret_arr = y_out
-        for _ in range(sample_num - 1):
-            ret_arr = torch.cat([ret_arr, y_out], dim=0)
-
-        return y_out, ret_arr
 
     # ------------------------------------------------------------------
     # 训练前向：返回 scalar loss（与 baseline 接口兼容）

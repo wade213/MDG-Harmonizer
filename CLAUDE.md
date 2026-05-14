@@ -31,12 +31,48 @@
 - **执行 Python**: `.\.venv\Scripts\python.exe`
 - **pip install**: `.\.venv\Scripts\pip.exe install xxx`
 
-## 严禁修改
+## 修改安全约束（严格遵守，每次操作前自查）
 
-- `.venv/` 下任何文件
-- `experiments/` 下历史实验记录
-- 原 `models/degradation_prior.py` 的 DegradationPrior 与 FiLMLayer (保留作 ablation baseline)
-- `models/loss.py` / `losses.py` 中已有损失类
+### 只能修改/新增的文件
+
+| 允许范围 | 说明 |
+|----------|------|
+| `models/cdp_net.py` | CDP-Net 退化先验编码器 |
+| `models/afm.py` | AFM 自适应调制模块 |
+| `models/fb_loss.py` | FB-Loss 损失函数 |
+| `models/dpm_solver.py` | DPM-Solver++ 采样器 |
+| `models/network_mdg.py` | MDG 主网络包装 |
+| `models/network_modified.py` | baseline DPM 接口（仅改 restoration_dpm） |
+| `models/model_mdg.py` | MDG 训练器 |
+| `models/guided_diffusion_modules/unet_mdg.py` | MDG UNet |
+| `models/__init__.py` | 模块导出 |
+| `config/*.json` | 配置文件 |
+| `run.py` | 训练入口 |
+| `scripts/*.py` | 脚本 |
+| `tools/*.py` | 工具（含新建可视化脚本） |
+| `evaluation/*.py` | 评估脚本 |
+| `CLAUDE.md` | 本文件 |
+| `paper/`、`figs/` | 论文和图表目录（待新建） |
+
+### 严禁修改/删除
+
+- `.venv/` — 虚拟环境，动辄 4.6GB 重装
+- `experiments/` — 历史实验记录和 checkpoint
+- `models/degradation_prior.py` — ablation baseline
+- `models/loss.py`、`models/losses.py`、`models/network_modified_backup.py` — 原 HCDM baseline
+- `pretrained_model/` — 预训练权重
+- `Hday2night/`、`TestData/` — 数据集
+- `core/` — 基础框架代码
+- `.gitignore`、`.git/` — git 相关
+
+### 操作红线和安全规则
+
+1. **绝不 `rm -rf`** 任何目录，尤其是 `experiments/`、`.venv/`、`pretrained_model/`
+2. **绝不 `git reset --hard`** 或 `git push --force`
+3. **修改前先备份**：涉及 >20 行的改动，先用 `cp` 备份原文件
+4. **只改目标方法**：修 DPM bug 只能改 `restoration_dpm` 相关方法，不动其他 forward/training 逻辑
+5. **改完跑单元测试**：修改后立即 `python -m models.xxx` 验证
+6. **不确定时先问**：任何超出上述"允许范围"的修改，必须先确认
 
 ## 实验对比基线
 

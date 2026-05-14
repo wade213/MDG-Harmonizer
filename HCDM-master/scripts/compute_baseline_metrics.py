@@ -70,12 +70,20 @@ def _try_ssim(out: np.ndarray, gt: np.ndarray) -> Optional[float]:
 
 def _resolve_mask_path(stem: str, mask_root: Path) -> Optional[Path]:
     """匹配多种常见 mask 文件名约定，返回首个存在的。"""
+    import re
     candidates = [
         mask_root / f"{stem}.png",
         mask_root / f"{stem}.jpg",
         mask_root / f"{stem}_mask.png",
         mask_root / f"{stem}_mask.jpg",
     ]
+    # 去掉末尾 _N 后缀再试（如 d1048_xxx_1_1 → d1048_xxx_1）
+    stripped = re.sub(r'_\d+$', '', stem)
+    if stripped != stem:
+        candidates.extend([
+            mask_root / f"{stripped}.png",
+            mask_root / f"{stripped}.jpg",
+        ])
     for c in candidates:
         if c.exists():
             return c
@@ -131,6 +139,7 @@ def main() -> None:
     ssim_list: List[float] = []
     fmae_list: List[float] = []
     fpsnr_list: List[float] = []
+    fssim_list: List[float] = []
     n_with_mask = 0
     skim_unavailable = False
 
@@ -169,6 +178,16 @@ def main() -> None:
                     fmse = float((np.square(diff) * m3).sum() / m_sum)
                     fmae_list.append(fmae)
                     fpsnr_list.append(_safe_psnr(fmse))
+                    # fSSIM: crop to mask bounding box
+                    ys, xs = np.where(mask > 0.5)
+                    if len(ys) > 0:
+                        y0, y1 = max(ys.min() - 4, 0), min(ys.max() + 5, mask.shape[0])
+                        x0, x1 = max(xs.min() - 4, 0), min(xs.max() + 5, mask.shape[1])
+                        out_crop = out_rgb.astype(np.uint8)[y0:y1, x0:x1]
+                        gt_crop = gt_rgb.astype(np.uint8)[y0:y1, x0:x1]
+                        fssim_v = _try_ssim(out_crop, gt_crop)
+                        if fssim_v is not None:
+                            fssim_list.append(fssim_v)
                     n_with_mask += 1
 
         if (i + 1) % 25 == 0:
@@ -187,6 +206,8 @@ def main() -> None:
         summary["fMAE"] = float(np.mean(fmae_list))
         summary["fPSNR"] = float(np.mean(fpsnr_list))
         summary["num_images_with_mask"] = n_with_mask
+    if fssim_list:
+        summary["fSSIM"] = float(np.mean(fssim_list))
 
     print()
     print("=" * 60)
@@ -200,7 +221,7 @@ def main() -> None:
     if skim_unavailable:
         print("  (skimage not available, SSIM skipped)")
     if not fmae_list:
-        print("  (no masks resolved, fMAE/fPSNR skipped)")
+        print("  (no masks resolved, fMAE/fPSNR/fSSIM skipped)")
 
     out_json = (
         Path(args.out_json) if args.out_json else (run_dir / "baseline_metrics.json")

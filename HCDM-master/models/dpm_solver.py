@@ -51,13 +51,15 @@ def _get_schedule(alphas_cumprod: np.ndarray, steps: int) -> Tuple[np.ndarray, n
     # Half log-SNR
     lambdas = np.log(alphas / np.maximum(sigmas, 1e-20))
 
-    # Uniform spacing in lambda from max (noisiest) to min (cleanest)
-    lambda_min = lambdas[0]      # t=0 (clean)
-    lambda_max = lambdas[-1]     # t=T-1 (noisy)
-    lambda_grid = np.linspace(lambda_max, lambda_min, steps + 1)
-
-    # Nearest-neighbour lookup → integer timesteps
-    t_schedule = np.array([int(np.argmin(np.abs(lambdas - lam))) for lam in lambda_grid], dtype=np.int64)
+    # Adaptive spacing: quadratic in timestep concentrates steps near t=0
+    # where alpha changes fastest (linear beta schedule has most signal change
+    # in the last ~200 steps).  Uniform spacing in t leads to 80% of DPM
+    # steps wasted where α≈0; uniform in lambda causes numerical explosion.
+    t_lin = np.linspace(0, (T - 1) ** 0.5, steps + 1, dtype=np.float64)
+    t_grid = np.int64(np.round(t_lin ** 2))
+    t_grid[-1] = T - 1  # ensure last step is noisiest
+    t_grid[0] = 0       # ensure first step is cleanest
+    t_schedule = np.flip(np.unique(t_grid))  # descending, no duplicates
 
     alpha_schedule = alphas[t_schedule]
     sigma_schedule = sigmas[t_schedule]

@@ -200,9 +200,9 @@ class RIHD(BaseModel):
         return self.val_metrics.result()
 
     def _run_restoration(self, netG):
-        """Dispatch to DDPM or DPM-Solver++ based on ``self.opt['sampler']``."""
+        """Dispatch to DDPM or DDIM based on ``self.opt['sampler']``."""
         sampler = self.opt.get('sampler', 'ddpm')
-        if sampler == 'dpm' and hasattr(netG, 'restoration_dpm'):
+        if sampler == 'ddim' and hasattr(netG, 'restoration_dpm'):
             if self.task in ['inpainting', 'uncropping']:
                 return netG.restoration_dpm(
                     self.cond_image, y_t=self.cond_image,
