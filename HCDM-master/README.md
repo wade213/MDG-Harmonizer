@@ -129,6 +129,14 @@ python scripts/infer_single.py \
 
 基于 HCDM：*Image Harmonization in Complex Degradation Scenes*
 
+## 文档索引
+
+- [CONTRIBUTION.md](../CONTRIBUTION.md) — 代码贡献声明（新增/修改文件清单）
+- [ACKNOWLEDGEMENT.md](../ACKNOWLEDGEMENT.md) — HCDM 来源声明
+- [docs/method.md](../docs/method.md) — 三个模块详细说明 + HCDM vs MDG 对比
+- [docs/original_HCDM_README.md](../docs/original_HCDM_README.md) — 原 HCDM 项目说明（保留）
+- [CLAUDE.md](../CLAUDE.md) — 项目开发记录与调试经验
+
 ## 联系方式
 
 GitHub: https://github.com/wade213/MDG-Harmonizer
