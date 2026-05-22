@@ -94,8 +94,8 @@ config/mdg_decoder_finetune_*.json              — decoder finetune 配置
 
 ## 运行环境
 
-- **项目根目录**: `D:\HCDM-master\HCDM-master\`
-- **虚拟环境**: `D:\HCDM-master\HCDM-master\.venv\`
+- **项目根目录**: `D:\HCDM-master\src\`
+- **虚拟环境**: `D:\HCDM-master\src\.venv\`
 - **执行 Python**: `.\.venv\Scripts\python.exe`
 - **pip install**: `.\.venv\Scripts\pip.exe install xxx`
 

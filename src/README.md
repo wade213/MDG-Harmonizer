@@ -29,7 +29,7 @@ HCDM 需要 63M 参数全训练、770 epoch。我们冻结预训练 U-Net 底座
 ## 项目结构
 
 ```
-HCDM-master/
+src/
 ├── models/                    ← 核心模型代码
 │   ├── cdp_net.py             ← CDP-Net 退化编码器（自写）
 │   ├── afm.py                 ← AFM 自适应调制（自写）
