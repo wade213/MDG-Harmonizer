@@ -18,7 +18,12 @@ def is_image_file(filename):
 
 def make_dataset(dir):
     if os.path.isfile(dir):
-        images = [i for i in np.genfromtxt(dir, dtype=np.str, encoding='utf-8')]
+        parent = os.path.dirname(os.path.abspath(dir))
+        images = []
+        for i in np.genfromtxt(dir, dtype=str, encoding='utf-8'):
+            img = str(i).strip()
+            if img:
+                images.append(os.path.join(parent, img))
     else:
         images = []
         assert os.path.isdir(dir), '%s is not a valid directory' % dir
@@ -142,9 +147,36 @@ class UncroppingDataset(data.Dataset):
 import torchvision.transforms.functional as tf
 from data.base_dataset import get_transform
 
+
+def _derive_harmonization_paths(path):
+    """从复合图路径推导 mask 和 real image 路径。
+
+    文件名格式: <basename>_<maskid>_<compidx>.ext
+    mask:       <basename>_<maskid>.png  (同级 ../masks/ 目录)
+    real:       <basename>.jpg           (同级 ../real_images/ 目录)
+    """
+    dirname = os.path.dirname(path)
+    filename = os.path.basename(path)
+    stem, _ = os.path.splitext(filename)
+    parts = stem.split('_')
+    # 至少需要 basename_maskid_compidx 三段
+    basename = '_'.join(parts[:-2])
+    maskid = parts[-2]
+    mask_name = f"{basename}_{maskid}.png"
+    real_name = f"{basename}.jpg"
+    mask_path = os.path.join(dirname, '..', 'masks', mask_name)
+    target_path = os.path.join(dirname, '..', 'real_images', real_name)
+    return mask_path, target_path
+
+
 class HarmonizationTrainDataset(data.Dataset):
     def __init__(self, data_root, mask_config={}, data_len=-1, image_size=[256, 256], loader=pil_loader):
-        imgs = make_dataset(data_root)
+        if isinstance(data_root, (list, tuple)):
+            imgs = []
+            for dr in data_root:
+                imgs.extend(make_dataset(dr))
+        else:
+            imgs = make_dataset(data_root)
         if data_len > 0:
             self.imgs = imgs[:int(data_len)]
         else:
@@ -156,7 +188,7 @@ class HarmonizationTrainDataset(data.Dataset):
         ])
         self.loader = loader
         self.image_size = image_size
-        
+
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5,0.5, 0.5])
@@ -165,11 +197,7 @@ class HarmonizationTrainDataset(data.Dataset):
     def __getitem__(self, index):
         ret = {}
         path = self.imgs[index]
-        name_parts=path.split('_')
-        mask_path = self.imgs[index].replace('composite_images_train','masks') # #修改点5，如果是带噪声的训练，将这里修改为composite_noisy25_images
-        mask_path = mask_path.replace(('_'+name_parts[-1]),'.png')
-        target_path = self.imgs[index].replace('composite_images_train','real_images') # #修改点6，如果是带噪声的训练，将这里修改为composite_noisy25_images
-        target_path = target_path.replace(('_'+name_parts[-2]+'_'+name_parts[-1]),'.jpg')
+        mask_path, target_path = _derive_harmonization_paths(path)
 
         comp = Image.open(path).convert('RGB')
         real = Image.open(target_path).convert('RGB')
@@ -199,7 +227,12 @@ class HarmonizationTrainDataset(data.Dataset):
 
 class HarmonizationTestDataset(data.Dataset):
     def __init__(self, data_root, mask_config={}, data_len=-1, image_size=[256, 256], loader=pil_loader):
-        imgs = make_dataset(data_root)
+        if isinstance(data_root, (list, tuple)):
+            imgs = []
+            for dr in data_root:
+                imgs.extend(make_dataset(dr))
+        else:
+            imgs = make_dataset(data_root)
         if data_len > 0:
             self.imgs = imgs[:int(data_len)]
         else:
@@ -211,7 +244,7 @@ class HarmonizationTestDataset(data.Dataset):
         ])
         self.loader = loader
         self.image_size = image_size
-        
+
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5,0.5, 0.5])
@@ -220,11 +253,7 @@ class HarmonizationTestDataset(data.Dataset):
     def __getitem__(self, index):
         ret = {}
         path = self.imgs[index]
-        name_parts=path.split('_')
-        mask_path = self.imgs[index].replace('composite_images_test','masks') # #修改点5，如果是带噪声的训练，将这里修改为composite_noisy25_images
-        mask_path = mask_path.replace(('_'+name_parts[-1]),'.png')
-        target_path = self.imgs[index].replace('composite_images_test','real_images') # #修改点6，如果是带噪声的训练，将这里修改为composite_noisy25_images
-        target_path = target_path.replace(('_'+name_parts[-2]+'_'+name_parts[-1]),'.jpg')
+        mask_path, target_path = _derive_harmonization_paths(path)
 
         comp = Image.open(path).convert('RGB')
         real = Image.open(target_path).convert('RGB')

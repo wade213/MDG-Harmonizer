@@ -44,7 +44,7 @@ class MDGUNet(BaseUNet):
         self,
         *args,
         deg_dim: int = 32,
-        afm_num_tokens: int = 4,
+        afm_num_tokens: int = 8,
         afm_use_checkpoint: bool = True,
         **kwargs,
     ) -> None:
@@ -154,8 +154,8 @@ if __name__ == "__main__":
         res_blocks=2,
         attn_res=[16],  # 与正式 config 同
         channel_mults=channel_mults,
-        deg_dim=32,
-        afm_num_tokens=4,
+        deg_dim=64,
+        afm_num_tokens=8,
         afm_use_checkpoint=False,
         use_checkpoint=False,
         use_fp16=False,

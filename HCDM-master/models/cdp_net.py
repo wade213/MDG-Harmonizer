@@ -8,7 +8,7 @@ MDG-Harmonizer 的紧凑退化先验编码器，用于替换原 baseline `Degrad
       复杂退化场景（光照偏色、噪声、饱和度等）下的细粒度先验。
     - CDPNet 采用 4 级轻量卷积主干 + 多任务**解耦输出头**：
       亮度 / 色温 / 饱和度 / 噪声水平 这 4 个标量分量可被显式辅助监督，
-      剩余 28 维通用 embedding 走端到端学习；总输出 32 维供后续 AFM 调制使用。
+      剩余 60 维通用 embedding 走端到端学习；总输出 64 维供后续 AFM 调制使用。
     - 整网参数 < 1 M，支持 fp16 (autocast)，符合 RTX 3050 Ti 4–6 GB 显存预算。
 """
 
@@ -60,25 +60,25 @@ class CDPNet(nn.Module):
     Args:
         in_channels: 拼接后输入通道数。默认为 4（RGB + 1 通道前景 mask）。
         backbone_channels: 4 级下采样后的通道数序列，长度必须为 4。
-        embed_dim: 通用 embedding 头的输出维度。配合 4 个标量头组成 32 维 ``deg_vector``。
+        embed_dim: 通用 embedding 头的输出维度。配合 4 个标量头组成 64 维 ``deg_vector``。
 
     Forward Returns:
-        deg_vector: ``(B, 32)`` 退化先验向量，供 AFM 等调制模块消费。
+        deg_vector: ``(B, 64)`` 退化先验向量，供 AFM 等调制模块消费。
         aux_dict: 含四个解耦标量预测，便于辅助监督：
             - ``brightness``: ``(B, 1)``
             - ``color_temp``: ``(B, 1)``
             - ``saturation``: ``(B, 1)``
             - ``noise_level``: ``(B, 1)``
-            - ``general_embed``: ``(B, 28)``  # 同时暴露便于调试 / 可视化
+            - ``general_embed``: ``(B, 60)``  # 同时暴露便于调试 / 可视化
 
-    总输出维度 = 1 + 1 + 1 + 1 + 28 = 32。
+    总输出维度 = 1 + 1 + 1 + 1 + 60 = 64。
     """
 
     def __init__(
         self,
         in_channels: int = 4,
         backbone_channels: Tuple[int, int, int, int] = (16, 32, 64, 128),
-        embed_dim: int = 28,
+        embed_dim: int = 60,
     ) -> None:
         super().__init__()
         if len(backbone_channels) != 4:
@@ -108,11 +108,11 @@ class CDPNet(nn.Module):
         self.head_general_embed = nn.Linear(c4, embed_dim)
 
         self._embed_dim = embed_dim
-        self._out_dim = 4 + embed_dim  # = 32
+        self._out_dim = 4 + embed_dim  # = 64
 
     @property
     def out_dim(self) -> int:
-        """deg_vector 的输出维度，方便下游模块按属性查询而不写死 32。"""
+        """deg_vector 的输出维度，方便下游模块按属性查询而不写死 64。"""
         return self._out_dim
 
     def forward(
@@ -197,13 +197,13 @@ if __name__ == "__main__":
     print(f"[fp32] aux['noise_level'] shape:{tuple(aux['noise_level'].shape)}")
     print(f"[fp32] aux['general_embed'] sh: {tuple(aux['general_embed'].shape)}")
 
-    assert deg_vector.shape == (B, 32), f"期望 (B, 32)，实际 {tuple(deg_vector.shape)}"
+    assert deg_vector.shape == (B, 64), f"期望 (B, 64)，实际 {tuple(deg_vector.shape)}"
     for k, expected in [
         ("brightness", (B, 1)),
         ("color_temp", (B, 1)),
         ("saturation", (B, 1)),
         ("noise_level", (B, 1)),
-        ("general_embed", (B, 28)),
+        ("general_embed", (B, 60)),
     ]:
         assert aux[k].shape == expected, f"aux[{k}] 期望 {expected}，实际 {tuple(aux[k].shape)}"
     assert torch.isfinite(deg_vector).all(), "fp32 输出含 NaN/Inf"

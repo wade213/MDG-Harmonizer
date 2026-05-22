@@ -202,15 +202,18 @@ class RIHD(BaseModel):
     def _run_restoration(self, netG):
         """Dispatch to DDPM or DDIM based on ``self.opt['sampler']``."""
         sampler = self.opt.get('sampler', 'ddpm')
+        ddim_steps = self.opt.get('ddim_steps', 25)
         if sampler == 'ddim' and hasattr(netG, 'restoration_dpm'):
             if self.task in ['inpainting', 'uncropping']:
                 return netG.restoration_dpm(
                     self.cond_image, y_t=self.cond_image,
                     y_0=self.gt_image, mask=self.mask, sample_num=self.sample_num,
+                    dpm_steps=ddim_steps,
                 )
             else:
                 return netG.restoration_dpm(
                     self.cond_image, sample_num=self.sample_num,
+                    dpm_steps=ddim_steps,
                 )
         else:
             if self.task in ['inpainting', 'uncropping']:
@@ -267,6 +270,7 @@ class RIHD(BaseModel):
                 _ = model.restoration_dpm(
                     self.cond_image, y_t=self.cond_image, y_0=self.gt_image, mask=self.mask,
                     sample_num=min(4, self.sample_num),
+                    dpm_steps=self.opt.get('ddim_steps', 25),
                 )
             else:
                 if self.task in ['inpainting','uncropping']:

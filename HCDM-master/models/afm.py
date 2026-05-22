@@ -3,7 +3,7 @@
 替代原 ``FiLMLayer`` 的简单仿射调制。
 
 核心思想：
-    - 把退化向量 ``deg_vec (B, 32)`` 通过 MLP 扩展成 K=4 个 token
+    - 把退化向量 ``deg_vec (B, 64)`` 通过 MLP 扩展成 K=8 个 token
       （每个 token 维度 = ``C/4``），让退化先验在「token 子空间」内可解耦表达。
     - 用单头轻量 cross-attention（query=features, key/value=tokens，
       投影维度降到 ``C/4``）让每个空间位置自适应地选择需要的退化分量，
@@ -13,12 +13,13 @@
 
 参数与显存预算（C=64 时）：
     - 单实例参数 < 0.5 M（实际 ~ 1.3 万）
-    - cross-attention 在 ``C/4`` 维度做（不是 C），fp16 下 attention 矩阵
-      显存约 ``B*N*K`` floats，K=4 极小。
+    - cross-attention 在 ``C/K`` 维度做（不是 C），fp16 下 attention 矩阵
+      显存约 ``B*N*K`` floats，K=8 极小。
 
-冻结主干 + 只训新模块的训练范式要求新模块「初始化即恒等」，否则会立刻
-破坏预训练特征导致前几个 epoch 直接发散。这里通过零初始化 ``out_proj``、
-``gamma``、``beta`` 让 ``forward`` 在初始化时严格等于 ``features``。
+冻结主干 + 只训新模块的训练范式要求新模块「初始化近似恒等」，否则会立刻
+破坏预训练特征导致前几个 epoch 直接发散。这里通过小随机初始化 ``out_proj``、
+``gamma``（std=0.01~0.02），``beta`` 保持零初始化，让 ``forward`` 在初始化时
+近似等于 ``features``，同时保证梯度能流过 CDP-Net。
 """
 
 from __future__ import annotations
@@ -33,16 +34,16 @@ class AFM(nn.Module):
 
     Args:
         feature_channels: 特征图通道数 C，必须能被 ``num_tokens`` 整除。
-        degradation_dim:  退化向量维度（默认 32，匹配 CDP-Net 输出）。
-        num_tokens:       K，token 数量（默认 4）。
+        degradation_dim:  退化向量维度（默认 64，匹配 CDP-Net 输出）。
+        num_tokens:       K，token 数量（默认 8）。
         use_checkpoint:   是否对前向用 ``torch.utils.checkpoint`` 包装以省显存。
     """
 
     def __init__(
         self,
         feature_channels: int,
-        degradation_dim: int = 32,
-        num_tokens: int = 4,
+        degradation_dim: int = 64,
+        num_tokens: int = 8,
         use_checkpoint: bool = True,
     ) -> None:
         super().__init__()
@@ -79,12 +80,12 @@ class AFM(nn.Module):
         self._reset_parameters()
 
     def _reset_parameters(self) -> None:
-        # 让 AFM 初始化为「恒等映射」：output == features。
-        # 冻结预训练 U-Net 后再插入 AFM，如果初始化非恒等，前几步就会
-        # 把预训练好的特征污染掉，PSNR 直接掉到比 baseline 还差。
-        nn.init.zeros_(self.out_proj.weight)
+        # 让 AFM 初始化为「近似恒等映射」。
+        # 用小随机初始化代替零初始化，解决 CDP-Net 梯度被阻断的冷启动问题。
+        # out_proj/gamma 用极小 std，beta 保持零，保证 output ≈ features。
+        nn.init.normal_(self.out_proj.weight, std=0.001)
         nn.init.zeros_(self.out_proj.bias)
-        nn.init.zeros_(self.gamma_layer.weight)
+        nn.init.normal_(self.gamma_layer.weight, std=0.001)
         nn.init.zeros_(self.gamma_layer.bias)
         nn.init.zeros_(self.beta_layer.weight)
         nn.init.zeros_(self.beta_layer.bias)
@@ -103,7 +104,7 @@ class AFM(nn.Module):
         v = self.v_proj(tokens)       # (B, K, C/4)
 
         scale = self.attn_dim ** -0.5
-        # K=4 极小，attention 矩阵 (B, N, K) 几乎不占显存
+        # K=8 极小，attention 矩阵 (B, N, K) 几乎不占显存
         attn_logits = torch.matmul(q, k.transpose(-2, -1)) * scale  # (B, N, K)
         attn_weights = attn_logits.softmax(dim=-1)
         attn_out = torch.matmul(attn_weights, v)                    # (B, N, C/4)
@@ -145,9 +146,9 @@ if __name__ == "__main__":
     torch.manual_seed(0)
 
     B, C, H, W = 2, 64, 32, 32
-    deg_dim = 32
+    deg_dim = 64
 
-    afm = AFM(feature_channels=C, degradation_dim=deg_dim, num_tokens=4)
+    afm = AFM(feature_channels=C, degradation_dim=deg_dim, num_tokens=8)
     afm.eval()  # CPU 测试关掉 checkpoint 触发条件，走纯前向
 
     features = torch.randn(B, C, H, W)
@@ -169,10 +170,10 @@ if __name__ == "__main__":
     print(f"Under 0.5M budget     : {n_params < 5e5}")
     print()
 
-    # 初始化恒等性检查（out_proj/gamma/beta 全零 -> output == features）
+    # 初始化近似恒等性检查（small init -> output ≈ features）
     identity_err = (out - features).abs().max().item()
     print(f"Init-time identity max-abs-err : {identity_err:.3e}")
-    print(f"Init is identity (~ 0)         : {identity_err < 1e-5}")
+    print(f"Init is near-identity (< 0.2)  : {identity_err < 0.2}")
     print()
 
     # 反向传播健全性检查

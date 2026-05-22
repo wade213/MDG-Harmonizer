@@ -139,6 +139,7 @@ class MDGNetwork(BaseNetwork):
         fb_loss: Optional[Dict] = None,
         loss_weights: Optional[Dict] = None,
         freeze_backbone: bool = False,
+        unfreeze_decoder_last_n: int = 0,
         deg_dim: int = 32,
         cdp_zero_vec: bool = False,
         disable_afm: bool = False,
@@ -179,7 +180,7 @@ class MDGNetwork(BaseNetwork):
         self.beta_schedule = beta_schedule
         self.freeze_backbone = freeze_backbone
         if freeze_backbone:
-            self._freeze_backbone()
+            self._freeze_backbone(unfreeze_decoder_last_n)
 
         # ------- 6) ablation 开关（仅消融实验使用，主训练保持 False） -------
         # 同时配合 cdp_zero_vec / disable_afm 配置可精准复现：
@@ -213,7 +214,7 @@ class MDGNetwork(BaseNetwork):
     # ------------------------------------------------------------------
     # 冻结控制
     # ------------------------------------------------------------------
-    def _freeze_backbone(self) -> None:
+    def _freeze_backbone(self, unfreeze_decoder_last_n: int = 0) -> None:
         """冻结 ``denoise_fn`` 中除 AFM + 输出层之外的所有参数。
 
         4 GB VRAM 下连原 baseline 单 batch 训练都 OOM；MDG-Harmonizer 的核心
@@ -223,6 +224,10 @@ class MDGNetwork(BaseNetwork):
 
         输出层 (out / out_list) 始终可训练：它们是零初始化卷积，不解冻则
         无 AFM 时（消融 C）前向输出恒为零，无法训练。
+
+        Args:
+            unfreeze_decoder_last_n: 解冻 output_blocks 最后 N 个 block。
+                0 = 默认行为（全部冻结）；6 = 解冻后 6 个（ch=64/128 层）。
         """
         # 1) 整个 denoise_fn 先全部冻结
         for p in self.denoise_fn.parameters():
@@ -238,6 +243,13 @@ class MDGNetwork(BaseNetwork):
         for m in self.denoise_fn.out_list:
             for p in m.parameters():
                 p.requires_grad = True
+        # 4) 解冻解码器最后 N 个 block（云端微调用）
+        if unfreeze_decoder_last_n > 0:
+            blocks = self.denoise_fn.output_blocks
+            start = len(blocks) - unfreeze_decoder_last_n
+            for idx in range(start, len(blocks)):
+                for p in blocks[idx].parameters():
+                    p.requires_grad = True
         # 3) 修复 frozen ResBlock / AttentionBlock 的 checkpoint 兼容性问题。
         #    自定义 ``CheckpointFunction.backward`` 调 ``torch.autograd.grad``
         #    会要求所有传入的 params 都 ``requires_grad=True``；冻结后会报
@@ -529,7 +541,8 @@ class MDGNetwork(BaseNetwork):
             )
             c_sq = c_sq.clamp(min=0.0)
             sigma = eta * c_sq.sqrt()
-            d_sq = (1.0 - a_s - c_sq).clamp(min=0.0)
+            sigma_sq = sigma * sigma
+            d_sq = (1.0 - a_s - sigma_sq).clamp(min=0.0)
 
             if s_val > 0:
                 noise = torch.randn_like(x) if eta > 0 else torch.zeros_like(x)
@@ -732,28 +745,9 @@ if __name__ == "__main__":
         if p.requires_grad and p.grad is not None and p.grad.abs().sum().item() > 0
     )
     print(f"[step 1] AFM nonzero-grad params:    {afm_nonzero_1}")
-    print(f"[step 1] CDPNet nonzero-grad params: {cdp_nonzero_1}  (期望 0：被 AFM 零初始化阻断)")
+    print(f"[step 1] CDPNet nonzero-grad params: {cdp_nonzero_1}  (期望 > 0：small-init 保证梯度流通)")
     assert afm_nonzero_1 >= 4, "step 1: AFM out_proj/film 路径应拿到梯度"
-
-    # 真实训练首步会把 AFM 的零初始化层（out_proj/gamma/beta）推离零；
-    # 我们手动模拟一下 optimizer.step()，再跑第二个 forward+backward，
-    # 验证此后 CDPNet 也能拿到梯度。
-    with _torch.no_grad():
-        for p in net.denoise_fn.afm_bottleneck.parameters():
-            if p.grad is not None:
-                p.add_(-1e-2 * p.grad)  # 简易 SGD step
-    for p in net.parameters():
-        if p.grad is not None:
-            p.grad.zero_()
-
-    loss2 = net(y_0, y_cond=y_cond, mask=mask)
-    loss2.backward()
-    cdp_nonzero_2 = sum(
-        1 for _, p in net.cdp_net.named_parameters()
-        if p.requires_grad and p.grad is not None and p.grad.abs().sum().item() > 0
-    )
-    print(f"[step 2] CDPNet nonzero-grad params: {cdp_nonzero_2}  (期望 > 0：AFM 已离开零)")
-    assert cdp_nonzero_2 >= 1, "step 2: AFM 离开零后 CDPNet 应通过 film/cross-attn 路径拿到梯度"
+    assert cdp_nonzero_1 >= 1, "step 1: small-init 后 CDPNet 应在首步就拿到梯度"
 
     # restoration（极迷你 num_timesteps=8 加快 CPU 测试）
     net.eval()

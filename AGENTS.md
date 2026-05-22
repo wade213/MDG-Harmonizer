@@ -106,7 +106,7 @@ config/mdg_decoder_finetune_*.json              — decoder finetune 配置
 | `tools/*.py` | 工具（含新建可视化脚本） |
 | `data/dataset.py` | 数据集加载（支持 list data_root + 文件名路径推导） |
 | `evaluation/*.py` | 评估脚本 |
-| `CLAUDE.md` | 本文件 |
+| `AGENTS.md` | 本文件 |
 | `paper/`、`figs/` | 论文和图表目录（待新建） |
 
 ### 严禁修改/删除

@@ -104,6 +104,7 @@ def main() -> None:
         help="把聚合指标写到 JSON（默认：<run>/baseline_metrics.json）",
     )
     parser.add_argument("--limit", type=int, default=0, help="仅取前 N 张（debug）")
+    parser.add_argument("--out-csv", default=None, help="逐图指标导出为 CSV")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -140,6 +141,7 @@ def main() -> None:
     fmae_list: List[float] = []
     fpsnr_list: List[float] = []
     fssim_list: List[float] = []
+    per_image_rows: List[Dict] = []
     n_with_mask = 0
     skim_unavailable = False
 
@@ -154,6 +156,9 @@ def main() -> None:
         mae = float(np.abs(diff).mean())
         mse = float(np.square(diff).mean())
         psnr = _safe_psnr(mse)
+        fmae = None
+        fpsnr = None
+        fssim_v = None
 
         ssim_v = _try_ssim(out_rgb.astype(np.uint8), gt_rgb.astype(np.uint8))
         if ssim_v is None:
@@ -177,7 +182,8 @@ def main() -> None:
                     fmae = float((np.abs(diff) * m3).sum() / m_sum)
                     fmse = float((np.square(diff) * m3).sum() / m_sum)
                     fmae_list.append(fmae)
-                    fpsnr_list.append(_safe_psnr(fmse))
+                    fpsnr = _safe_psnr(fmse)
+                    fpsnr_list.append(fpsnr)
                     # fSSIM: crop to mask bounding box
                     ys, xs = np.where(mask > 0.5)
                     if len(ys) > 0:
@@ -192,6 +198,17 @@ def main() -> None:
 
         if (i + 1) % 25 == 0:
             print(f"  processed {i+1}/{len(pairs)}: MAE={mae:.3f} PSNR={psnr:.3f}")
+
+        per_image_rows.append({
+            "image": stem,
+            "MAE": mae,
+            "MSE": mse,
+            "PSNR": psnr,
+            "SSIM": ssim_v if ssim_v is not None else float("nan"),
+            "fMAE": fmae if fmae is not None else float("nan"),
+            "fPSNR": fpsnr if fpsnr is not None else float("nan"),
+            "fSSIM": fssim_v if fssim_v is not None else float("nan"),
+        })
 
     # 聚合
     summary: Dict[str, float] = {
@@ -229,6 +246,15 @@ def main() -> None:
     with open(out_json, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
     print(f"\nWrote: {out_json}")
+
+    if args.out_csv and per_image_rows:
+        import csv
+        csv_path = Path(args.out_csv)
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=per_image_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(per_image_rows)
+        print(f"Wrote: {csv_path} ({len(per_image_rows)} rows)")
 
 
 if __name__ == "__main__":
