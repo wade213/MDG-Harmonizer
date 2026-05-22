@@ -200,31 +200,63 @@ class RIHD(BaseModel):
         return self.val_metrics.result()
 
     def _run_restoration(self, netG):
-        """Dispatch to DDPM or DDIM based on ``self.opt['sampler']``."""
+        """Dispatch to DDPM, DDIM or DPM-Solver++.
+
+        Dispatch rule:
+            ``sampler == 'ddim'`` → ``restoration_ddim`` (DDIM, eta=0 by default)
+            ``sampler == 'dpm'``  → ``restoration_dpm``  (DPM-Solver++)
+            else                  → ``restoration``      (DDPM)
+
+        Note: ``--sampler ddim`` maps to DDIM, NOT DPM.  Use ``--sampler dpm``
+        for the actual DPM-Solver++ path when it has been validated.
+        """
         sampler = self.opt.get('sampler', 'ddpm')
         ddim_steps = self.opt.get('ddim_steps', 25)
-        if sampler == 'ddim' and hasattr(netG, 'restoration_dpm'):
+
+        # ----------------------------------------------------------------
+        # DDIM path
+        # ----------------------------------------------------------------
+        if sampler == 'ddim' and hasattr(netG, 'restoration_ddim'):
+            if self.task in ['inpainting', 'uncropping']:
+                return netG.restoration_ddim(
+                    self.cond_image, y_t=self.cond_image,
+                    y_0=self.gt_image, mask=self.mask, sample_num=min(4, self.sample_num),
+                    ddim_steps=ddim_steps,
+                )
+            else:
+                return netG.restoration_ddim(
+                    self.cond_image, sample_num=min(4, self.sample_num),
+                    ddim_steps=ddim_steps,
+                )
+
+        # ----------------------------------------------------------------
+        # DPM-Solver++ path
+        # ----------------------------------------------------------------
+        if sampler == 'dpm' and hasattr(netG, 'restoration_dpm'):
             if self.task in ['inpainting', 'uncropping']:
                 return netG.restoration_dpm(
                     self.cond_image, y_t=self.cond_image,
-                    y_0=self.gt_image, mask=self.mask, sample_num=self.sample_num,
+                    y_0=self.gt_image, mask=self.mask, sample_num=min(4, self.sample_num),
                     dpm_steps=ddim_steps,
                 )
             else:
                 return netG.restoration_dpm(
-                    self.cond_image, sample_num=self.sample_num,
+                    self.cond_image, sample_num=min(4, self.sample_num),
                     dpm_steps=ddim_steps,
                 )
+
+        # ----------------------------------------------------------------
+        # DDPM path (default)
+        # ----------------------------------------------------------------
+        if self.task in ['inpainting', 'uncropping']:
+            return netG.restoration(
+                self.cond_image, y_t=self.cond_image,
+                y_0=self.gt_image, mask=self.mask, sample_num=self.sample_num,
+            )
         else:
-            if self.task in ['inpainting', 'uncropping']:
-                return netG.restoration(
-                    self.cond_image, y_t=self.cond_image,
-                    y_0=self.gt_image, mask=self.mask, sample_num=self.sample_num,
-                )
-            else:
-                return netG.restoration(
-                    self.cond_image, sample_num=self.sample_num,
-                )
+            return netG.restoration(
+                self.cond_image, sample_num=self.sample_num,
+            )
 
     def test(self):
         self.netG.eval()

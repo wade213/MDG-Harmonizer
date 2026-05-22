@@ -567,16 +567,48 @@ class MDGNetwork(BaseNetwork):
         sample_num: int = 8,
         dpm_steps: int = 25,
         dpm_order: int = 2,
-        eta: float = 0.0,
     ):
-        """DDIM 别名，保留接口兼容。
+        """DPM-Solver++ 快速采样。
 
-        ``dpm_steps`` 映射为 ``ddim_steps``，``eta`` 直传。
+        与 ``restoration()`` (DDPM) 接口一致，仅采样器不同。
+        使用 ``--sampler dpm --ddim-steps 25`` 启用。
+
+        Note:
+            DDIM 使用 ``--sampler ddim``（调用 ``restoration_ddim``），
+            与 DPM-Solver++ 是不同的方法，不要混用。
         """
-        return self.restoration_ddim(
-            y_cond=y_cond, y_t=y_t, y_0=y_0, mask=mask,
-            sample_num=sample_num, ddim_steps=dpm_steps, eta=eta,
+        from .dpm_solver import dpm_solver_restoration
+
+        b, *_ = y_cond.shape
+        device = y_cond.device
+        y_t = _default(y_t, lambda: torch.randn_like(y_cond))
+
+        deg_vec = self._compute_deg_vec(y_cond, mask)
+
+        # 构造 denoise_fn 闭包适配 dpm_solver_restoration
+        def model_fn(x, noise_level, deg_vec=None):
+            return self.denoise_fn(x, noise_level, deg_vec=deg_vec)
+
+        y_out, ret_arr = dpm_solver_restoration(
+            denoise_fn=model_fn,
+            y_cond=y_cond,
+            alphas_cumprod=self.gammas.cpu().numpy(),
+            mask=mask,
+            y_t=y_t,
+            deg_vec=deg_vec,
+            y_0=y_0,
+            steps=dpm_steps,
+            order=dpm_order,
+            progress=True,
         )
+
+        # sample_num 兼容：从 ret_arr 中采样
+        if sample_num > 0 and ret_arr.shape[0] > 1:
+            n_total = ret_arr.shape[0]
+            indices = torch.linspace(0, n_total - 1, min(sample_num, n_total)).long()
+            ret_arr = ret_arr[indices]
+
+        return y_out, ret_arr
 
     # ------------------------------------------------------------------
     # 训练前向：返回 scalar loss（与 baseline 接口兼容）

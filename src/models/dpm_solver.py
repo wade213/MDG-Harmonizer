@@ -25,6 +25,7 @@ from typing import Callable, Optional, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import tqdm
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +173,7 @@ def dpm_solver_restoration(
     mask: Optional[torch.Tensor] = None,
     y_t: Optional[torch.Tensor] = None,
     deg_vec: Optional[torch.Tensor] = None,
+    y_0: Optional[torch.Tensor] = None,
     steps: int = 25,
     order: int = 2,
     progress: bool = True,
@@ -186,13 +188,14 @@ def dpm_solver_restoration(
         mask:           foreground mask (B, 1, H, W), or None.
         y_t:            initial noise tensor, or None (random init).
         deg_vec:        degradation prior vector (B, deg_dim), or None.
+        y_0:            ground-truth image for repaint mask blending (B, 3, H, W).
         steps:          DPM-Solver steps (default 25).
         order:          solver order (2).
         progress:       show tqdm bar.
 
     Returns:
         y_out:          restored image (B, 3, H, W).
-        ret_arr:        intermediate results, compatible with baseline format.
+        ret_arr:        intermediate results (sample_num, B, 3, H, W).
     """
     b = y_cond.shape[0]
     device = y_cond.device
@@ -202,38 +205,58 @@ def dpm_solver_restoration(
 
     # --- model_fn closure ---
     def model_fn(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        # HCDM UNet expects [y_cond, x] concatenated along channel dim
         unet_input = torch.cat([y_cond, x], dim=1)  # (B, 6, H, W)
-        # t is integer timestep in [0, T-1]
-        # Convert to noise_level (gammas)
         noise_level = torch.from_numpy(alphas_cumprod[t.cpu().numpy()]).to(
             device=device, dtype=x.dtype
         ).view(-1, 1)
         pred_noise_list = denoise_fn(unet_input, noise_level, deg_vec=deg_vec)
-        # Last output = full-resolution noise prediction
         return pred_noise_list[-1]
 
-    # --- run DPM-Solver ---
-    x_0 = dpm_solver_plus_plus(
-        model_fn=model_fn,
-        x_T=y_t,
-        alphas_cumprod=alphas_cumprod,
-        steps=steps,
-        order=order,
-        progress=progress,
+    # --- DPM-Solver++ main loop with per-step repaint mask blending ---
+    T = len(alphas_cumprod) - 1
+    t_seq = _get_dpm_timesteps(T, steps)
+    x = y_t
+    ret_list = [x]
+
+    iterator = tqdm.tqdm(
+        zip(t_seq[:-1], t_seq[1:]),
+        desc="DPM-Solver++ sampling",
+        total=len(t_seq) - 1,
+        disable=not progress,
     )
+    for t_curr, t_next in iterator:
+        t_batch = torch.full((b,), t_curr, device=device)
+        eps = model_fn(x, t_batch)
 
-    # --- mask blending (same as baseline restoration) ---
-    if mask is not None:
-        # In baseline, the blending happens during the loop:
-        #   y_t = y_0 * (1-mask) + mask * y_t
-        # For DPM-Solver we do it at the end (approximation — same effect
-        # since the DDIM-like steps preserve the clean background).
-        pass  # x_0 is already full-image; mask blending handled outside if needed
+        a_curr = alphas_cumprod[t_curr]
+        a_next = alphas_cumprod[t_next]
+        sigma = 0.0  # deterministic (order-2 equivalent)
 
-    # ret_arr compatible format: cat of sample_num intermediate results
-    # For simplicity, return just the final output
-    return x_0, x_0.unsqueeze(0)
+        # Predict x_0
+        x_0_pred = (x - np.sqrt(1 - a_curr) * eps) / np.sqrt(a_curr)
+        x_0_pred = x_0_pred.clamp(-1.0, 1.0)
+
+        # DPM-Solver++ step: x_next = sqrt(a_next) * x_0_pred + sqrt(1-a_next-sigma^2) * eps + sigma * z
+        a_next_t = torch.tensor(a_next, device=device, dtype=x.dtype)
+        c1 = a_next_t.sqrt()
+        c2 = torch.sqrt(torch.clamp(1.0 - a_next_t - sigma**2, min=0.0))
+        x = c1 * x_0_pred + c2 * eps
+
+        # Repaint: blend background from ground truth
+        if mask is not None and y_0 is not None:
+            x = y_0 * (1.0 - mask) + mask * x
+
+        ret_list.append(x)
+
+    # Build ret_arr: stack intermediate results
+    ret_arr = torch.cat(ret_list, dim=0)  # (N_steps+1, B, 3, H, W)
+
+    return x, ret_arr
+
+
+def _get_dpm_timesteps(T: int, steps: int) -> list:
+    """Uniformly spaced timesteps from T down to 0 (inclusive)."""
+    return np.linspace(T, 0, steps + 1).astype(int).tolist()
 
 
 # ---------------------------------------------------------------------------
