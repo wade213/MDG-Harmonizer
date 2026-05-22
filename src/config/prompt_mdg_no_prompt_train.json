@@ -1,5 +1,5 @@
 {
-    "name": "prompt_mdg",
+    "name": "prompt_mdg_no_prompt",
     "gpu_ids": [
         0
     ],
@@ -156,12 +156,11 @@
                             "linear_end": 0.09
                         }
                     },
-                    "use_prompt": true,
+                    "use_prompt": false,
                     "prompt_num": 8,
                     "prompt_dim": 64,
                     "prompt_hidden": 128,
-                    "prompt_temperature": 1.0,
-                    "prompt_uniform": false
+                    "prompt_temperature": 1.0
                 }
             }
         ],

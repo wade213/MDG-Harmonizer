@@ -2,13 +2,17 @@
 
 与 MDGNetwork 的区别仅在于 ``_compute_deg_vec``:
     MDG:  CDP-Net → deg_vec
-    PromptMDG: CDP-Net → deg_vec → Prompt Bank → fused_deg_vec
+    PromptMDG: CDP-Net → deg_vec → Prompt Bank (增强) → fused_deg_vec
+
+Prompt Bank 不是替代 CDP-Net，而是对其输出做自适应增强：
+CDP-Net 提供结构化的退化先验 d，Prompt Bank 从 K 个可学习退化原型中
+自适应选择并融合，产生增强后的退化条件 d'。
 
 其余逻辑（denoise_fn, AFM, FB-Loss, restoration, training forward）完全继承。
 
-用法：
-    训练时加载 MDG checkpoint 初始化 CDP/AFM/FB-Loss 权重，
-    冻结 backbone+CDP，只训 Prompt Bank + AFM。
+训练策略:
+    加载训练好的 MDG-A checkpoint 初始化 CDP/AFM/FB-Loss 权重，
+    冻结 backbone + CDP-Net，只训练 Prompt Bank + AFM。
 """
 
 from __future__ import annotations
@@ -109,6 +113,12 @@ class PromptMDGNetwork(MDGNetwork):
     # ------------------------------------------------------------------
     def _freeze_backbone(self, unfreeze_decoder_last_n: int = 0) -> None:
         super()._freeze_backbone(unfreeze_decoder_last_n)
+
+        # CDP-Net 冻结：退化编码能力由 MDG-A checkpoint 提供，不再更新
+        cdp = getattr(self, "cdp_net", None)
+        if cdp is not None:
+            for p in cdp.parameters():
+                p.requires_grad = False
 
         # Prompt Bank 可训练（init 时可能尚未创建，用 getattr）
         bank = getattr(self, "prompt_bank", None)
