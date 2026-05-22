@@ -1,95 +1,134 @@
-This repo provides the official  code  and datasets of the paper 'Image Harmonization in Complex Degradation Scenes'
+# MDG-Harmonizer
 
-### D-iHarmony4 dataset
+**本科毕业设计项目** — 在 HCDM 扩散模型框架上做图像 harmonization（图像协调），通过三个轻量模块实现参数高效迁移，在冻结预训练底座的前提下追平原版全训练指标。
 
-**We release the D-iHarmony4 dataset**. It contains 4 sub-datasets: **D-HCOCO**,**D-HAdobe5k**, **D-HFlickr**, and **D-Hday2night**, each of which contains degraded composite images, foreground masks of composite images and corresponding real images. The D-iHarmony4 dataset is provided in  [**Baidu Cloud**](https://pan.baidu.com/s/1z6VfVOKCJiQxTDxnVcsVJA) (access code: 5pfl).
+## 三个核心模块
 
-| |D-HCOCO|D-HAdobe5k|D-HFlickr|D-Hday2night|D-iHarmony4 |
-|:--:|:--:|:--:|:--:|:--:|:--:|
-|Training set| 38545 |19437| 7449 |311|65742|
-|Test set| 4283 |2160| 828 |133|7404|
+| 模块 | 全称 | 替换对象 | 参数 |
+|------|------|---------|------|
+| **CDP-Net** | Compact Degradation Prior Network | DegradationPrior（8维）→ 64维卷积编码 + 解耦头 | < 1M |
+| **AFM** | Adaptive Feature Modulation | FiLMLayer → Cross-Attention 空间自适应调制 | < 0.5M |
+| **FB-Loss** | Foreground-Boundary Aware Loss | 新增：前景/边界/感知/频率 5 项损失 | 0 |
 
+## 核心思路
 
-### 1. D-HCOCO
+HCDM 需要 63M 参数全训练、770 epoch。我们冻结预训练 U-Net 底座，只训练三个插件模块（~0.6M 参数），30 epoch 追平 baseline。
 
-D-HCOCO, containing 42k degraded composite images, is generated based on [Microsoft COCO](<http://cocodataset.org/>) dataset. The foreground region is corresponding object segmentation mask provided from COCO. Within the foreground region, the appearance of COCO image is edited using various color transfer methods. 
+## 实验结果 (D-Hday2night, DDPM 1000 步)
 
+| 模型 | 模块 | PSNR | SSIM | MAE |
+|------|------|------|------|-----|
+| HCDM (baseline) | 原版全训练 | 36.85 | — | 1.19 |
+| **MDG A (Full)** | CDP + AFM + FB-Loss | **36.56** | 0.974 | 1.29 |
+| MDG B | AFM + FB-Loss (无 CDP) | 36.18 | 0.974 | 1.46 |
+| MDG C | CDP + FB-Loss (无 AFM) | 待测 | — | — |
+| MDG D | CDP + AFM (无 FB-Loss) | 待测 | — | — |
 
-### 2. D-HAdobe5k
+**推理加速**：DDPM 200 步 PSNR 35.76（仅降 0.8 dB），加速 **5 倍**。
 
-D-HAdobe5k is generated based on [MIT-Adobe FiveK](<http://data.csail.mit.edu/graphics/fivek/>) dataset. Provided with 6 editions of the same image, we manually segment the foreground region and exchange foregrounds between 2 versions. 
-
-
-### 3. D-HFlickr
-
-We collected 4833 images from [Flickr](<https://www.flickr.com/>). After manually segmenting the foreground region, we use the same method as D-HCOCO to generate HFlickr sub-dataset. 
-
-
-### 4. D-Hday2night
-
-D-Hday2night is generated based on [day2night](https://pan.baidu.com/s/1bCtVhhtb_EDool_UnN2Bjw) dataset. We manually segment the foreground region, which is cropped and overlaid on another image captured on a different time. 
-
-### The Original iHarmony4 dataset
-
-The original iHarmony4 dataset is provided in  [**Baidu Cloud**](https://pan.baidu.com/s/1xEN0Xrv_MbuKT0ZqsipeEg) (access code: kqz3) and [**One Drive**](https://1drv.ms/f/s!AohNSvvkuxZmgTHOraRzo5-X3nMp?e=bQQKkR).
-
-### Pre-trained Models
-
-* The pretrained models are  at [Baidu Cloud](https://pan.baidu.com/s/1uUe7u-oW-iPuZI-d3jKsfA) (access code：qeek) and [google drive](https://drive.google.com/drive/folders/1SSojkgJgUM41jzwR9xbN6ki2jFqsr33E?usp=sharing)
-
-
-### Pre-requirements
+## 项目结构
 
 ```
+HCDM-master/
+├── models/                    ← 核心模型代码
+│   ├── cdp_net.py             ← CDP-Net 退化编码器（自写）
+│   ├── afm.py                 ← AFM 自适应调制（自写）
+│   ├── fb_loss.py             ← FB-Loss 损失函数（自写）
+│   ├── network_mdg.py         ← MDGNetwork 扩散网络（自写）
+│   ├── model_mdg.py           ← MDGTrainer 训练器（自写）
+│   ├── guided_diffusion_modules/unet_mdg.py ← MDG UNet（自写）
+│   ├── degradation_prior.py   ← 原 HCDM baseline（勿改）
+│   ├── network_modified.py    ← 原 HCDM 网络（勿改）
+│   └── model_rihd.py          ← 原 HCDM 训练器
+├── data/dataset.py            ← 数据集加载（修改）
+├── config/                    ← 实验配置
+│   ├── ablation_A_full_*.json ← Full MDG（CDP+AFM+FB）
+│   ├── ablation_B_no_cdp_*.json
+│   ├── ablation_C_no_afm_*.json
+│   └── ablation_D_no_fb_*.json
+├── scripts/
+│   ├── compute_baseline_metrics.py  ← PSNR/SSIM 指标计算
+│   ├── infer_single.py       ← 单图推理
+│   ├── pack_for_cloud.sh     ← 云端打包
+│   └── setup_cloud.sh        ← 云端环境初始化
+├── tools/setup_diharmony4_datasets.py ← 数据集目录创建
+├── core/                     ← 框架代码（勿改）
+├── run.py                    ← 训练/测试入口
+└── pretrained_model/         ← 预训练权重（需单独下载）
+```
+
+## 快速开始
+
+### 环境
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Train
+### 数据集准备
 
-train on day2night dataset:
-
-```
-python -W ignore run.py -p train -c config/harmonization_day2night_modified_allinone.json
-```
-
-
-### Test
-
-2D Map:
-
-Download the pretained models frist and put the models under 'pretrained_model\checkpoint\2d_map\ ' directory. Then run the follow code:
+本项目使用 **D-iHarmony4** 数据集（退化版），非原版 iHarmony4。数据集目录结构：
 
 ```
-python -W ignore run.py -p test -c config/harmonization_day2night_modified_allinone_2d_test.json
+D-HCOCO/
+├── composite_degraded_images/   ← 所有退化合成图
+├── composite_images_train/      ← 硬链接分出（脚本自动创建）
+├── composite_images_test/
+├── masks/
+├── real_images/
+├── HCOCO_train.txt
+└── HCOCO_test.txt
 ```
 
-1D Embedding:
-
-Download the pretained models frist and put the models under 'pretrained_model\checkpoint\1D_embed\' directory. Then run the follow code:
-
-```
-python -W ignore run.py -p test -c config/harmonization_day2night_modified_allinone.json
-```
-The results will be gengerated in a directory like this:
-```
-experiments/test_harmonization_allinone_220818_115348/results/test/0
-```
-### Evaluation
-
-Change the output_path variable in 'evaluate.py' to the complete generated result directory.
-
-```
-experiments/test_harmonization_allinone_220818_115348/results/test/0
-```
-Then run the fllowing code:
-
-```
-python evaluation/evaluate.py
+```bash
+# 下载 D-HCOCO / D-HFlickr / D-Hday2night 后运行：
+python tools/setup_diharmony4_datasets.py
 ```
 
-The evalution results will be displayed on console as follows:
+### 训练
+
+```bash
+# 消融 A (Full MDG)
+python run.py -p train -c config/ablation_A_full_train.json -gpu 0
 ```
-MSE 37.73 | PSNR 36.89 | SSIM 0.975 |fMSE 643.64 | fPSNR 21.79 | fSSIM 0.5056
+
+**注意**：配置已设为 fp32 + lr=3e-5（稳定方案）。不要在低显存 GPU 上开 AMP。
+
+### 测试
+
+```bash
+python run.py -p test -c config/ablation_A_full_test.json -gpu 0
+
+# 计算指标
+python -W ignore scripts/compute_baseline_metrics.py \
+    --run experiments/test_<timestamp> \
+    --mask-root TestData/Hday2night/masks
 ```
-## **Contact**
-Please contact me if there is any question (guanguanboy@gmail.com)
+
+### 单图推理
+
+```bash
+python scripts/infer_single.py \
+    --checkpoint <你的checkpoint.pth> \
+    --input <输入图.jpg> \
+    --mask <mask图.png> \
+    --output <输出.jpg> \
+    --steps 200 \
+    --gpu
+```
+
+## 训练稳定性注意事项
+
+- 关闭 AMP（fp16），使用 fp32 训练
+- 学习率设为 3e-5（5e-4 会导致 CDP-Net 梯度爆炸 → NaN）
+- 冻结 backbone 时确保 `freeze_backbone: true`
+- 先用小数据集验证 loss 正常（~1.0），再跑完整训练
+- DDIM 与 repaint 策略不兼容，推荐 **DDPM 200 步**加速推理
+
+## 引用
+
+基于 HCDM：*Image Harmonization in Complex Degradation Scenes*
+
+## 联系方式
+
+GitHub: https://github.com/wade213/MDG-Harmonizer

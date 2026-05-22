@@ -22,7 +22,7 @@
             "which_dataset": {
                 "name": ["data.dataset", "HarmonizationTrainDataset"],
                 "args": {
-                    "data_root": "./Hday2night/composite_images_train/",
+                    "data_root": ["./D-Hday2night/composite_images_train/", "./D-HCOCO/composite_images_train/", "./D-HFlickr/composite_images_train/"],
                     "data_len": -1,
                     "mask_config": {
                         "mask_mode": "hybrid"
@@ -80,7 +80,7 @@
                 // makes most params constant anyway, EMA gives near-zero benefit.
 
                 // ===== MDGTrainer opt-in fields =====
-                "use_amp": true,
+                "use_amp": false,
                 "gradient_accumulation_steps": 4,
                 "pretrained_label": "Network",
                 "log_loss_breakdown": true
@@ -92,7 +92,7 @@
                 "args": {
                     "init_type": "kaiming",
                     "freeze_backbone": true,
-                    "deg_dim": 32,
+                    "deg_dim": 64,
 
                     // Same UNet config as baseline guided_diffusion. MDGUNet adds
                     // one AFM at the bottleneck; everything else is identical so
@@ -115,11 +115,11 @@
                     "cdp": {
                         "in_channels": 4,
                         "backbone_channels": [16, 32, 64, 128],
-                        "embed_dim": 28
+                        "embed_dim": 60
                     },
 
                     "afm": {
-                        "num_tokens": 4,
+                        "num_tokens": 8,
                         "use_checkpoint": true
                     },
 
@@ -159,11 +159,11 @@
         "which_optimizers": [
             // Only ~0.6M trainable params after freeze; can use larger lr (5e-4) than
             // baseline (5e-5) since modules are smaller and benefit from faster convergence.
-            { "name": "Adam", "args": { "lr": 5e-4, "weight_decay": 0 } }
+            { "name": "Adam", "args": { "lr": 3e-5, "weight_decay": 0 } }
         ],
 
         "which_lr_schedulers": [
-            { "name": "CosineAnnealingLR", "args": { "T_max": 30 } }
+            { "name": "CosineAnnealingLR", "args": { "T_max": 50 } }
         ],
 
         "which_losses": [
@@ -180,7 +180,7 @@
     "train": {
         // 30 epoch * 156 iter/epoch * ~0.4s/iter = ~30 min on dummy data;
         // real training with dataloader IO + EMA-skipped + tensorboard est. 1-1.5h.
-        "n_epoch": 30,
+        "n_epoch": 50,
         "n_iter": 1e6,
         // Validation is slow (1000-step DDPM sampling); run sparingly.
         "val_epoch": 10,

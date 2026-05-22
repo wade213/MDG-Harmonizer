@@ -145,7 +145,7 @@ class CDPNet(nn.Module):
         noise_level = self.head_noise_level(feat)      # (B, 1)
         general_embed = self.head_general_embed(feat)  # (B, 28)
 
-        # 拼接为 32 维退化先验向量；顺序固定，便于消费方 slice 出对应分量
+        # 拼接为 64 维退化先验向量；顺序固定，便于消费方 slice 出对应分量
         deg_vector = torch.cat(
             [brightness, color_temp, saturation, noise_level, general_embed],
             dim=1,

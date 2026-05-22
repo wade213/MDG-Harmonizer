@@ -78,7 +78,7 @@
             "args": {
                 "sample_num": 8,
                 "task": "inpainting",
-                "use_amp": true,
+                "use_amp": false,
                 "gradient_accumulation_steps": 4,
                 "pretrained_label": "Network",
                 "log_loss_breakdown": true
@@ -163,7 +163,7 @@
             {
                 "name": "Adam",
                 "args": {
-                    "lr": 0.0005,
+                    "lr": 3e-05,
                     "weight_decay": 0
                 }
             }

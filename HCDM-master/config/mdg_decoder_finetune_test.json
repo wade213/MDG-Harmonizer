@@ -1,5 +1,5 @@
 {
-    "name": "mdg_ablation_B_no_cdp",
+    "name": "mdg_decoder_finetune",
     "gpu_ids": [
         0
     ],
@@ -11,7 +11,7 @@
         "tb_logger": "tb_logger",
         "results": "results",
         "checkpoint": "checkpoint",
-        "resume_state": "experiments/train_mdg_ablation_B_no_cdp_260511_173849/checkpoint/30"
+        "resume_state": "experiments/train_mdg_decoder_finetune_[TIMESTAMP]/checkpoint/50"
     },
     "datasets": {
         "train": {
@@ -88,6 +88,7 @@
                 "args": {
                     "init_type": "kaiming",
                     "freeze_backbone": true,
+                    "unfreeze_decoder_last_n": 6,
                     "deg_dim": 64,
                     "unet": {
                         "in_channel": 6,
@@ -150,8 +151,7 @@
                             "linear_start": 0.0001,
                             "linear_end": 0.09
                         }
-                    },
-                    "cdp_zero_vec": true
+                    }
                 }
             }
         ],
@@ -159,7 +159,7 @@
             {
                 "name": "Adam",
                 "args": {
-                    "lr": 3e-5,
+                    "lr": 0.0001,
                     "weight_decay": 0
                 }
             }
@@ -168,7 +168,7 @@
             {
                 "name": "CosineAnnealingLR",
                 "args": {
-                    "T_max": 30
+                    "T_max": 50
                 }
             }
         ],
@@ -180,7 +180,7 @@
         ]
     },
     "train": {
-        "n_epoch": 30,
+        "n_epoch": 50,
         "n_iter": 1000000.0,
         "val_epoch": 10,
         "save_checkpoint_epoch": 5,
