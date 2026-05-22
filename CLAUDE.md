@@ -28,7 +28,7 @@
 - **本地 GPU**: NVIDIA RTX 3050 Ti (4-6 GB VRAM) — 必须用 fp16 + 梯度累积
 - **训练分辨率**: 256x256
 - **训练策略**: 冻结 HCDM 预训练 U-Net 主干，仅训练新加模块
-- **推理加速**: DDIM 10步 (已实现，`--sampler ddim --ddim-steps 10`)
+- **推理加速**: DDPM 200步（5× 加速，PSNR 仅降 0.8 dB）。DDIM 与 repaint 策略不兼容（η=0 确定性模式边缘无法融合），放弃
 
 ## 三个核心模块
 
@@ -46,17 +46,32 @@
 |------|--------|------|------|-----|------|
 | 原 HCDM (1D_embed/770) | D-Hday2night (133 张) | 36.85 | — | 1.19 | 与论文报的 36.89 一致 |
 | 原 HCDM (2D_map/550) | D-Hday2night (133 张) | 23.40 | 0.920 | 5.54 | 未充分训练的对照模型 |
-| 原 HCDM (1D_embed/770) | D-HCOCO (4283 张) | 29.27 | 0.956 | 4.16 | 云端结果 |
 
-### 消融实验（已删除 — 训练集用错）
+### MDG-Harmonizer 消融实验（D-iHarmony4 三数据集混合训练，DDPM 1000步）
 
-> 以下结果已删除（2026-05-18）。训练用了 `Hday2night/`（iHarmony4），测试用了 `TestData/Hday2night/`（D-iHarmony4），数据不匹配，指标无效。
->
-> 已删除的实验目录: `experiments/train_mdg_*`、`experiments/test_mdg_*`、`experiments/ablation_*`
+| 消融 | 模块 | PSNR | SSIM | MAE | fPSNR | 备注 |
+|------|------|------|------|-----|-------|------|
+| A_full | CDP + AFM + FB-Loss | **36.56** | 0.974 | 1.29 | 21.43 | 追平 baseline |
+| B_no_cdp | AFM + FB-Loss | 36.18 | 0.974 | 1.46 | 21.03 | CDP 贡献 0.4 dB |
+| C_no_afm | CDP + FB-Loss | 待测 | — | — | — | 训练中 |
+| D_no_fb | CDP + AFM | 待测 | — | — | — | 训练中 |
 
-### 待重跑
+**训练配置**: 30 epoch, batch=16, fp32, lr=3e-5, freeze_backbone, AutoDL RTX 5090/PRO 6000
 
-- 所有消融实验需在 `D-Hday2night/composite_degraded_images/` 上重新训练和测试
+### 推理加速对比
+
+| 方法 | 步数 | PSNR | vs 1000步 | 加速比 |
+|------|------|------|----------|--------|
+| DDPM | 1000 | 36.56 | — | 1× |
+| DDPM | 200 | 35.76 | -0.8 dB | **5×** |
+| DDPM | 50 | 31.02 | -5.5 dB | 20× |
+
+## 关键调试经验
+
+- **AMP fp16 NaN**: lr=5e-4 + fp16 时 CDP-Net 梯度爆炸导致权重全 NaN，loss 变为 0。修复：关 AMP 用 fp32，lr 降到 3e-5
+- **DDIM 不兼容 repaint**: DDIM η=0 确定性模式不注入后验噪声，边缘无法融合。η=1 可工作但等于 DDPM，无加速效果。放弃 DDIM
+- **loss_per_epoch.npy 全 0**: pandas ChainedAssignmentError 导致 LogTracker 记录 NaN 被吞成 0，实际 loss 正常（~1.0）。不影响训练
+- **batch=48 + AMP 在 PRO 6000 96GB 上 OOM**: 加噪图(6ch) + 梯度图追踪消耗远超预期，batch=16 + fp32 稳定
 
 ## 自创/修改文件清单
 
@@ -130,8 +145,10 @@ config/mdg_decoder_finetune_*.json              — decoder finetune 配置
 
 ## 待做
 
-1. **重新训练消融实验**（A/B/C/D，三数据集混合训练，~46305 张）
-2. 排查推理采样 bug（之前 Full MDG PSNR=4.88，需确认是否是数据问题还是代码问题）
-3. 测试时分别在 D-Hday2night / D-HCOCO / D-HFlickr 上出指标
-4. D-HAdobe5k 测试（数据未下载）
-5. 论文撰写（`paper/` 目录）
+1. 消融 C (no AFM) 训练 + 测试
+2. 消融 D (no FB-Loss) 训练 + 测试
+3. 多卡并行跑 C/D 节省时间
+4. 论文工作二：Prompt Learning 退化原型编码（替代 CDP-Net，1K 参数）
+5. 系统搭建：图像 harmonization 演示系统（PySide6 或 Gradio）
+6. 论文撰写（`paper/` 目录）
+7. D-HCOCO、D-HFlickr 测试集上出指标（目前仅 D-Hday2night）
