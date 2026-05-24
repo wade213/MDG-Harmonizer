@@ -1,19 +1,27 @@
-"""单图推理脚本。用法:
+"""单图推理脚本（支持 MDG、PromptRouterMDG 等动态网络）。用法:
     .venv/Scripts/python.exe scripts/infer_single.py \
-        --checkpoint experiments/train_mdg_ablation_A_full_<ts>/checkpoint/30_MDGNetwork.pth \
-        --input TestData/Hday2night/composite_images_test/d1048-20120628-200951_1_1.jpg \
-        --mask TestData/Hday2night/masks/d1048-20120628-200951_1.png \
+        --config config/ablation_A_full_train.json \
+        --checkpoint experiments/.../checkpoint/30_MDGNetwork.pth \
+        --input TestData/Hday2night/composite_images_test/d1048...jpg \
+        --mask TestData/Hday2night/masks/d1048...png \
         --output output.jpg \
-        --steps 200
+        --steps 200 \
+        --gpu
+
+使用 Prompt Router 网络时，会额外输出 prompt_weights.json。
 """
 import argparse
+import json
 import torch
 from PIL import Image
 from torchvision.transforms import functional as tf
 from torchvision import transforms
 
-from models.network_mdg import MDGNetwork
-import json
+
+def _resolve_network_class(name: list[str]):
+    """动态加载网络类。name = [module_file, class_name]"""
+    mod = __import__(name[0], fromlist=[name[1]])
+    return getattr(mod, name[1])
 
 
 def main():
@@ -30,12 +38,15 @@ def main():
     device = torch.device("cuda" if args.gpu and torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    # 加载配置和模型
+    # 加载配置
     with open(args.config) as f:
         cfg = json.load(f)
-    net_args = cfg["model"]["which_networks"][0]["args"]
 
-    net = MDGNetwork(**net_args)
+    # 动态创建网络（不再硬编码 MDGNetwork）
+    net_spec = cfg["model"]["which_networks"][0]
+    net_args = dict(net_spec["args"])
+    NetworkClass = _resolve_network_class(net_spec["name"])
+    net = NetworkClass(**net_args)
     net.set_new_noise_schedule(device=device, phase="test")
 
     ckpt = torch.load(args.checkpoint, map_location=device)
@@ -66,8 +77,8 @@ def main():
     with torch.no_grad():
         output, ret_arr = net.restoration(
             comp_t,
-            y_t=comp_t,  # 从合成图开始（harmonization）
-            y_0=comp_t,   # repaint 用背景替换
+            y_t=comp_t,
+            y_0=comp_t,
             mask=mask_t,
             sample_num=2,
         )
@@ -81,12 +92,25 @@ def main():
     out_pil.save(args.output)
     print(f"Saved to {args.output}")
 
-    # 同时保存输入图对照
     in_img = unnorm(comp_t[0]).cpu()
     in_path = args.output.rsplit(".", 1)[0] + "_input.jpg"
     tf.to_pil_image(in_img).save(in_path)
     print(f"Input saved to {in_path}")
 
+    # Prompt Router 额外输出
+    prompt_aux = getattr(net, "_last_prompt_aux", None)
+    if prompt_aux and "prompt_weights" in prompt_aux:
+        w = prompt_aux["prompt_weights"][0].cpu().tolist()
+        labels = prompt_aux.get("descriptor_labels", [f"P{i}" for i in range(len(w))])
+        prompt_out = {labels[i]: w[i] for i in range(len(w))}
+        prompt_path = args.output.rsplit(".", 1)[0] + "_prompt.json"
+        with open(prompt_path, "w") as f:
+            json.dump(prompt_out, f, indent=2)
+        print(f"Prompt weights saved to {prompt_path}")
+        print(f"  {prompt_out}")
+
 
 if __name__ == "__main__":
+    import sys
+    sys.path.insert(0, ".")
     main()

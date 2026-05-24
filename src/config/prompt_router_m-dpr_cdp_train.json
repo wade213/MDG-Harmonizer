@@ -1,0 +1,204 @@
+{
+    "name": "prompt_router_m-dpr_cdp",
+    "gpu_ids": [
+        0
+    ],
+    "seed": 42,
+    "finetune_norm": false,
+    "path": {
+        "base_dir": "experiments",
+        "code": "code",
+        "tb_logger": "tb_logger",
+        "results": "results",
+        "checkpoint": "checkpoint",
+        "resume_state": "experiments/train_mdg_ablation_A_full_260523_204007/checkpoint/10"
+    },
+    "datasets": {
+        "train": {
+            "which_dataset": {
+                "name": [
+                    "data.dataset",
+                    "HarmonizationTrainDataset"
+                ],
+                "args": {
+                    "data_root": [
+                        "./D-Hday2night/composite_images_train/",
+                        "./D-HCOCO/composite_images_train/",
+                        "./D-HFlickr/composite_images_train/"
+                    ],
+                    "data_len": -1,
+                    "mask_config": {
+                        "mask_mode": "hybrid"
+                    }
+                }
+            },
+            "dataloader": {
+                "validation_split": 2,
+                "args": {
+                    "batch_size": 4,
+                    "num_workers": 2,
+                    "shuffle": true,
+                    "pin_memory": true,
+                    "drop_last": true
+                },
+                "val_args": {
+                    "batch_size": 1,
+                    "num_workers": 2,
+                    "shuffle": false,
+                    "pin_memory": true,
+                    "drop_last": false
+                }
+            }
+        },
+        "test": {
+            "which_dataset": {
+                "name": "HarmonizationTestDataset",
+                "args": {
+                    "data_root": "./TestData/Hday2night/composite_images_test/",
+                    "mask_config": {
+                        "mask_mode": "center"
+                    }
+                }
+            },
+            "dataloader": {
+                "args": {
+                    "batch_size": 1,
+                    "num_workers": 2,
+                    "pin_memory": true
+                }
+            }
+        }
+    },
+    "model": {
+        "which_model": {
+            "name": [
+                "models.model_mdg",
+                "MDGTrainer"
+            ],
+            "args": {
+                "sample_num": 8,
+                "task": "inpainting",
+                "use_amp": false,
+                "gradient_accumulation_steps": 4,
+                "pretrained_label": "MDGNetwork",
+                "log_loss_breakdown": true
+            }
+        },
+        "which_networks": [
+            {
+                "name": [
+                    "models.network_prompt_router_mdg",
+                    "PromptRouterMDGNetwork"
+                ],
+                "args": {
+                    "init_type": "kaiming",
+                    "freeze_backbone": true,
+                    "deg_dim": 64,
+                    "unet": {
+                        "in_channel": 6,
+                        "out_channel": 3,
+                        "inner_channel": 64,
+                        "channel_mults": [
+                            1,
+                            2,
+                            4,
+                            8
+                        ],
+                        "attn_res": [
+                            16
+                        ],
+                        "num_head_channels": 32,
+                        "res_blocks": 2,
+                        "dropout": 0.2,
+                        "image_size": 256,
+                        "use_checkpoint": true,
+                        "use_fp16": true
+                    },
+                    "cdp": {
+                        "in_channels": 4,
+                        "backbone_channels": [
+                            16,
+                            32,
+                            64,
+                            128
+                        ],
+                        "embed_dim": 60
+                    },
+                    "afm": {
+                        "num_tokens": 8,
+                        "use_checkpoint": true
+                    },
+                    "fb_loss": {
+                        "use_lpips": true,
+                        "weights": [
+                            1.0,
+                            3.0,
+                            5.0,
+                            0.1,
+                            0.5
+                        ]
+                    },
+                    "loss_weights": {
+                        "noise": 1.0,
+                        "fb": 0.3
+                    },
+                    "beta_schedule": {
+                        "train": {
+                            "schedule": "linear",
+                            "n_timestep": 2000,
+                            "linear_start": 1e-06,
+                            "linear_end": 0.01
+                        },
+                        "test": {
+                            "schedule": "linear",
+                            "n_timestep": 1000,
+                            "linear_start": 0.0001,
+                            "linear_end": 0.09
+                        }
+                    },
+                    "prompt_mode": "cdp_only",
+                    "prompt_dim": 64,
+                    "router_hidden": 32,
+                    "use_mlp_router": true
+                }
+            }
+        ],
+        "which_optimizers": [
+            {
+                "name": "Adam",
+                "args": {
+                    "lr": 3e-05,
+                    "weight_decay": 0
+                }
+            }
+        ],
+        "which_lr_schedulers": [
+            {
+                "name": "CosineAnnealingLR",
+                "args": {
+                    "T_max": 50
+                }
+            }
+        ],
+        "which_losses": [
+            "l1_loss"
+        ],
+        "which_metrics": [
+            "mae"
+        ]
+    },
+    "train": {
+        "n_epoch": 5,
+        "n_iter": 1000000.0,
+        "val_epoch": 10000,
+        "save_checkpoint_epoch": 5,
+        "log_iter": 20,
+        "tensorboard": true
+    },
+    "debug": {
+        "val_epoch": 1,
+        "save_checkpoint_epoch": 1,
+        "log_iter": 2,
+        "debug_split": 50
+    }
+}
