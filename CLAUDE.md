@@ -47,23 +47,36 @@
 | 原 HCDM (1D_embed/770) | D-Hday2night (133 张) | 36.85 | — | 1.19 | 与论文报的 36.89 一致 |
 | 原 HCDM (2D_map/550) | D-Hday2night (133 张) | 23.40 | 0.920 | 5.54 | 未充分训练的对照模型 |
 
-### MDG-Harmonizer 消融实验（D-iHarmony4 三数据集混合训练，DDPM 1000步）
+### MDG-Harmonizer 消融实验（D-iHarmony4 三数据集混合训练，DDPM 200步）
 
 | 消融 | 模块 | PSNR | SSIM | MAE | fPSNR | 备注 |
 |------|------|------|------|-----|-------|------|
-| A_full | CDP + AFM + FB-Loss | **36.56** | 0.974 | 1.29 | 21.43 | 追平 baseline |
-| B_no_cdp | AFM + FB-Loss | 36.18 | 0.974 | 1.46 | 21.03 | CDP 贡献 0.4 dB |
-| C_no_afm | CDP + FB-Loss | 待测 | — | — | — | 训练中 |
-| D_no_fb | CDP + AFM | 待测 | — | — | — | 训练中 |
+| D_no_fb | CDP + AFM | **36.40** | 0.973 | 1.54 | 21.26 | 31 epoch |
+| C_no_afm | CDP + FB-Loss | 35.86 | 0.971 | 1.72 | 20.72 | 38 epoch (cut at 30) |
+| A_full | CDP + AFM + FB-Loss | 35.81 | 0.972 | 1.59 | 20.67 | 30+10+10=50 epoch |
+| B_no_cdp | AFM + FB-Loss | 35.67 | 0.971 | 1.66 | 20.51 | 15+16=31 epoch |
 
-**训练配置**: 30 epoch, batch=16, fp32, lr=3e-5, freeze_backbone, AutoDL RTX 5090/PRO 6000
+**训练配置**: 30-50 epoch, batch=16, fp32, lr=3e-5, freeze_backbone, AutoDL RTX 5090/vGPU
+
+**A_full 训练历史**: 首次 30 epoch (260520_231626) → batch=8 续训 10 epoch (260523_142959) → batch=16 续训 10 epoch (260523_204007) = 有效 50 epoch
+
+### 解冻微调实验（基于 A_full 50epoch）
+
+| 方案 | 训练数据 | epoch | PSNR | 结论 |
+|------|---------|-------|------|------|
+| 冻结 (50ep) | 46K 混合 | 50 | 35.81 | 稳定基线 |
+| last2 decoder | 311张 | 5 | 35.67 | 近似冻结 |
+| last2 decoder | 2000张 | 5 | 35.50 | 略降 |
+| last6 decoder | 311张 | 10 | 34.63 | 灾难性遗忘 |
+
+**结论**: 解冻 decoder 均使指标下降，HCDM 预训练 U-Net 与旧退化管线深度耦合，少量微调不足以解绑。
 
 ### 推理加速对比
 
 | 方法 | 步数 | PSNR | vs 1000步 | 加速比 |
 |------|------|------|----------|--------|
 | DDPM | 1000 | 36.56 | — | 1× |
-| DDPM | 200 | 35.76 | -0.8 dB | **5×** |
+| DDPM | 200 | 35.81 | -0.8 dB | **5×** |
 | DDPM | 50 | 31.02 | -5.5 dB | 20× |
 
 ## 关键调试经验
@@ -145,10 +158,7 @@ config/mdg_decoder_finetune_*.json              — decoder finetune 配置
 
 ## 待做
 
-1. 消融 C (no AFM) 训练 + 测试
-2. 消融 D (no FB-Loss) 训练 + 测试
-3. 多卡并行跑 C/D 节省时间
-4. 论文工作二：Prompt Learning 退化原型编码（替代 CDP-Net，1K 参数）
-5. 系统搭建：图像 harmonization 演示系统（PySide6 或 Gradio）
-6. 论文撰写（`paper/` 目录）
-7. D-HCOCO、D-HFlickr 测试集上出指标（目前仅 D-Hday2night）
+1. 论文工作二：Prompt Learning 退化原型编码（替代 CDP-Net，1K 参数）
+2. 系统搭建：图像 harmonization 演示系统（PySide6 或 Gradio）
+3. 论文撰写（`paper/` 目录）
+4. D-HCOCO、D-HFlickr 测试集上出指标（目前仅 D-Hday2night）
