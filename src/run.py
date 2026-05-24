@@ -82,14 +82,15 @@ if __name__ == '__main__':
     parser.add_argument('-gpu', '--gpu_ids', type=str, default=None)
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('-P', '--port', default='21012', type=str)
-    parser.add_argument('--sampler', type=str, choices=['ddpm', 'ddim'], default='ddpm',
-                        help='Sampling method: ddpm (1000 steps) or ddim (DDIM 25 steps)')
+    parser.add_argument('--sampler', type=str, choices=['ddpm', 'ddim', 'dpm'], default='ddpm',
+                        help='Sampling: ddpm (default), ddim (DDIM), dpm (DPM-Solver++)')
     parser.add_argument('--ddim-steps', type=int, default=25,
-                        help='Number of DDIM sampling steps (default: 25)')
+                        help='Number of DDIM/DPM sampling steps (default: 25)')
 
     ''' parser configs '''
     args = parser.parse_args()
     opt = Praser.parse(args) #自定义的类来解析--config参数
+    opt['sampler'] = args.sampler
     opt['ddim_steps'] = args.ddim_steps
     
     ''' cuda devices '''

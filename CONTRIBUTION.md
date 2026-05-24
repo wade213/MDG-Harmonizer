@@ -12,7 +12,7 @@
 | `models/network_mdg.py` | MDG 主网络，整合 CDP-Net、AFM 和扩散模型 |
 | `models/model_mdg.py` | MDG 训练器，支持冻结 backbone、梯度累积、AMP 和 loss 日志 |
 | `models/guided_diffusion_modules/unet_mdg.py` | MDG UNet，在 bottleneck 加入 AFM |
-| `models/dpm_solver.py` | DPM-Solver++ 采样器（适配协调任务） |
+| `models/dpm_solver.py` | DPM-Solver++ 采样器（实验性，推荐使用 DDPM 200步） |
 | `config/ablation_A_full_train.json` | 完整模型训练配置（CDP + AFM + FB-Loss） |
 | `config/ablation_B_no_cdp_train.json` | 消融 B 训练配置（去除 CDP-Net） |
 | `config/ablation_C_no_afm_train.json` | 消融 C 训练配置（去除 AFM） |
