@@ -254,7 +254,7 @@ def _make_info_text(weights: np.ndarray, labels: list[str], preset: dict, steps:
 # ─── UI ──────────────────────────────────────────────────
 APP_CSS = """
 .gradio-container { max-width: 1280px !important; margin: auto !important; font-family: 'Inter', 'Microsoft YaHei', sans-serif; }
-.hero { padding: 28px 32px; border-radius: 22px; background: linear-gradient(135deg, #eef4ff 0%, #f8fbff 45%, #ffffff 100%); border: 1px solid #e4ecff; box-shadow: 0 10px 30px rgba(30,64,175,0.08); margin-bottom: 18px; }
+.hero { padding: 28px 32px; border-radius: 22px; border: 1px solid #e4ecff; box-shadow: 0 10px 30px rgba(30,64,175,0.08); margin-bottom: 18px; }
 .hero h1 { margin: 0 0 8px 0; font-size: 34px; font-weight: 800; color: #172554; }
 .hero p { margin: 0; font-size: 16px; color: #475569; }
 .badge { display: inline-block; padding: 6px 12px; margin: 12px 8px 0 0; border-radius: 999px; background: #dbeafe; color: #1e40af; font-size: 13px; font-weight: 600; }
@@ -265,8 +265,17 @@ def create_ui():
     default_model = list(MODEL_PRESETS.keys())[0]
 
     with gr.Blocks(title="MDG-Harmonizer") as demo:
-        gr.Markdown("""
-        <div class="hero">
+        # Encode preview image for hero background
+        import base64
+        preview_path = Path(__file__).parent / "preview.jpg"
+        if preview_path.exists():
+            b64 = base64.b64encode(preview_path.read_bytes()).decode()
+            hero_style = f'background: url(data:image/jpeg;base64,{b64}) center/cover, linear-gradient(135deg, #eef4ff 0%, #f8fbff 45%, #ffffff 100%); background-blend-mode: overlay;'
+        else:
+            hero_style = 'background: linear-gradient(135deg, #eef4ff 0%, #f8fbff 45%, #ffffff 100%);'
+
+        gr.Markdown(f"""
+        <div class="hero" style="{hero_style}">
           <h1>MDG-Harmonizer</h1>
           <p>退化感知图像协调与提示分析系统：支持工作一 CDP-AFM、工作二 M-DPR 以及融合模型推理。</p>
           <span class="badge">CDP-AFM 退化感知适配</span>
