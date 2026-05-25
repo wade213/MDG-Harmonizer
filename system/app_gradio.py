@@ -115,7 +115,8 @@ def _load_model(model_name: str, steps: int, device: torch.device):
     with open(str(_PROJECT_ROOT / preset["config"])) as f:
         cfg = json.load(f)
     cfg["path"]["resume_state"] = str(_PROJECT_ROOT / preset["checkpoint"])
-    cfg["model"]["which_networks"][0]["args"]["beta_schedule"]["test"]["n_timestep"] = int(steps)
+    # Always use 2000 timesteps to match checkpoint, override steps later
+    cfg["model"]["which_networks"][0]["args"]["beta_schedule"]["test"]["n_timestep"] = 2000
 
     ns = preset.get("network")
     if ns is not None:
@@ -132,6 +133,9 @@ def _load_model(model_name: str, steps: int, device: torch.device):
     missing, _ = net.load_state_dict(ckpt, strict=False)
     net = net.to(device)
     net.eval()
+    # Rebuild noise schedule with user-requested step count
+    net.beta_schedule["test"]["n_timestep"] = int(steps)
+    net.set_new_noise_schedule(device=device, phase="test")
 
     _MODEL_CACHE[key] = (net, len(missing))
     return _MODEL_CACHE[key]
