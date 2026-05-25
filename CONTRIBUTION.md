@@ -20,6 +20,10 @@
 | `scripts/compute_baseline_metrics.py` | PSNR/SSIM/MAE/fPSNR 指标计算脚本 |
 | `scripts/infer_single.py` | 单图推理脚本 |
 | `tools/setup_diharmony4_datasets.py` | D-iHarmony4 数据集目录结构创建工具 |
+| `models/degradation_descriptor.py` | 8 维退化描述子（工作二：M-DPR 核心） |
+| `models/degradation_prompt.py` | DegradationPromptBank + MaskAwarePromptRouter |
+| `models/network_prompt_router_mdg.py` | PromptRouterMDGNetwork（三种模式：descriptor/cdp/hybrid） |
+| `config/prompt_router_*_train.json` | M-DPR 退化提示路由训练配置（工作二） |
 
 ## 修改文件
 
