@@ -11,7 +11,7 @@
         "tb_logger": "tb_logger",
         "results": "results",
         "checkpoint": "checkpoint",
-        "resume_state": "experiments/train_mdg_ablation_C_no_afm_260514_213938/checkpoint/25"
+        "resume_state": "experiments/train_mdg_ablation_C_no_afm_260523_142638/checkpoint/30"
     },
     "datasets": {
         "train": {
@@ -147,7 +147,7 @@
                         },
                         "test": {
                             "schedule": "linear",
-                            "n_timestep": 1000,
+                            "n_timestep": 200,
                             "linear_start": 0.0001,
                             "linear_end": 0.09
                         }
@@ -159,7 +159,7 @@
             {
                 "name": "Adam",
                 "args": {
-                    "lr": 3e-5,
+                    "lr": 3e-05,
                     "weight_decay": 0
                 }
             }
