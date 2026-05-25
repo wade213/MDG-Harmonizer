@@ -112,9 +112,9 @@ def _load_model(model_name: str, steps: int, device: torch.device):
         return _MODEL_CACHE[key]
 
     preset = MODEL_PRESETS[model_name]
-    with open(preset["config"]) as f:
+    with open(str(_PROJECT_ROOT / preset["config"])) as f:
         cfg = json.load(f)
-    cfg["path"]["resume_state"] = preset["checkpoint"]
+    cfg["path"]["resume_state"] = str(_PROJECT_ROOT / preset["checkpoint"])
     cfg["model"]["which_networks"][0]["args"]["beta_schedule"]["test"]["n_timestep"] = int(steps)
 
     ns = preset.get("network")
@@ -128,7 +128,7 @@ def _load_model(model_name: str, steps: int, device: torch.device):
     net = NetCls(**net_args)
     net.set_new_noise_schedule(device=device, phase="test")
 
-    ckpt = torch.load(preset["checkpoint"], map_location=device)
+    ckpt = torch.load(str(_PROJECT_ROOT / preset["checkpoint"]), map_location=device)
     missing, _ = net.load_state_dict(ckpt, strict=False)
     net = net.to(device)
     net.eval()
