@@ -64,11 +64,12 @@ class DegradationDescriptor(nn.Module):
         return std.mean(dim=(1, 2, 3))
 
     def _high_freq_energy(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """高频能量比例，衡量噪声/纹理。"""
-        b, c, h, w = x.shape
-        fft = torch.fft.rfft2(x.float(), norm="ortho")
+        """mask 内区域的高频能量比例，衡量噪声/纹理。"""
+        x_masked = x * mask.float()
+        fft = torch.fft.rfft2(x_masked, norm="ortho")
         mag = fft.abs()
-        rh, rw = max(1, int(h * 0.125)), max(1, int(w * 0.125))
+        h, wh = mag.shape[2], mag.shape[3]
+        rh, rw = max(1, int(h * 0.125)), max(1, int(wh * 0.125))
         lo_mask = torch.zeros_like(mag)
         lo_mask[:, :, :rh, :rw] = 1.0
         lo_mask[:, :, -rh:, :rw] = 1.0

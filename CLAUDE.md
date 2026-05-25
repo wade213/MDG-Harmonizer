@@ -71,6 +71,17 @@
 
 **结论**: 解冻 decoder 均使指标下降，HCDM 预训练 U-Net 与旧退化管线深度耦合，少量微调不足以解绑。
 
+### M-DPR 掩码感知退化提示路由（工作二，DDPM 200步）
+
+| 实验 | 配置 | PSNR | 可训参数 |
+|------|------|------|---------|
+| MDG-D (基线) | CDP + AFM | 36.40 | ~0.6M |
+| **Router only** | descriptor_only | 35.94 | **~1K** |
+| Hybrid | CDP + Router | 35.80 | ~0.6M |
+| Uniform | 平均权重 | 35.38 | ~1K |
+
+**结论**: M-DPR 以 1K 可训参数达到接近主干性能（差 0.46 dB），自适应路由 (35.94) > 均匀权重 (35.38)，验证退化描述子 + Prompt Router 可独立工作。
+
 ### 推理加速对比
 
 | 方法 | 步数 | PSNR | vs 1000步 | 加速比 |
@@ -103,6 +114,11 @@ scripts/compute_baseline_metrics.py             — 指标计算脚本 (MAE/MSE/
 tools/setup_diharmony4_datasets.py              — 数据集目录结构创建脚本
 config/ablation_*_train.json / *_test.json      — 消融实验配置（data_root 改为三数据集列表）
 config/mdg_decoder_finetune_*.json              — decoder finetune 配置
+config/prompt_router_*_train.json               — M-DPR 退化提示路由实验配置（工作二）
+models/degradation_descriptor.py                — 8 维退化描述子（工作二核心）
+models/degradation_prompt.py                    — DegradationPromptBank + MaskAwarePromptRouter
+models/network_prompt_router_mdg.py             — PromptRouterMDGNetwork（三种模式）
+scripts/infer_single.py                         — 修改：支持动态网络 + prompt 权重输出
 ```
 
 ## 运行环境
@@ -158,7 +174,7 @@ config/mdg_decoder_finetune_*.json              — decoder finetune 配置
 
 ## 待做
 
-1. 论文工作二：Prompt Learning 退化原型编码（替代 CDP-Net，1K 参数）
-2. 系统搭建：图像 harmonization 演示系统（PySide6 或 Gradio）
-3. 论文撰写（`paper/` 目录）
-4. D-HCOCO、D-HFlickr 测试集上出指标（目前仅 D-Hday2night）
+1. 系统搭建：图像 harmonization 演示系统（Gradio，含退化分析可视化）
+2. 论文撰写（`paper/` 目录）
+3. D-HCOCO、D-HFlickr 测试集上出指标（目前仅 D-Hday2night）
+4. Prompt 权重可视化脚本
