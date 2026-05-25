@@ -25,6 +25,14 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent / "src"
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 matplotlib.use("Agg")
+# Chinese font support
+import matplotlib.font_manager as fm
+_SYS_FONTS = [f.name for f in fm.fontManager.ttflist]
+_CN_FONT = next((n for n in _SYS_FONTS if "Microsoft YaHei" in n or "SimHei" in n or "WenQuanYi" in n), None)
+if _CN_FONT:
+    matplotlib.rc("font", family=_CN_FONT, size=10)
+# Fallback for minus sign
+matplotlib.rc("axes", unicode_minus=False)
 
 # ─── Constants ──────────────────────────────────────────
 DESCRIPTOR_LABELS_EN = [
