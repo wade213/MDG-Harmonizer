@@ -265,17 +265,13 @@ def create_ui():
     default_model = list(MODEL_PRESETS.keys())[0]
 
     with gr.Blocks(title="MDG-Harmonizer") as demo:
-        # Encode preview image for hero background
-        import base64
         preview_path = Path(__file__).parent / "preview.jpg"
-        if preview_path.exists():
-            b64 = base64.b64encode(preview_path.read_bytes()).decode()
-            hero_style = f'background: url(data:image/jpeg;base64,{b64}) center/cover, linear-gradient(135deg, #eef4ff 0%, #f8fbff 45%, #ffffff 100%); background-blend-mode: overlay;'
-        else:
-            hero_style = 'background: linear-gradient(135deg, #eef4ff 0%, #f8fbff 45%, #ffffff 100%);'
+        with gr.Row():
+            if preview_path.exists():
+                gr.Image(str(preview_path), label="", show_label=False, container=False, height=240)
 
-        gr.Markdown(f"""
-        <div class="hero" style="{hero_style}">
+        gr.Markdown("""
+        <div class="hero">
           <h1>MDG-Harmonizer</h1>
           <p>退化感知图像协调与提示分析系统：支持工作一 CDP-AFM、工作二 M-DPR 以及融合模型推理。</p>
           <span class="badge">CDP-AFM 退化感知适配</span>
