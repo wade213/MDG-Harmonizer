@@ -189,6 +189,19 @@ def run_inference(
     progress(1.0, desc="完成")
     return comp_pil, mask_vis_pil, result_pil, fig, info
 
+def _safe_run(*args) -> tuple:
+    """错误处理包装，把报错显示在界面上。"""
+    try:
+        return run_inference(*args)
+    except Exception as e:
+        import traceback
+        err_fig = plt.Figure()
+        plt.text(0.5, 0.5, f"Error: {e}", ha="center", va="center", fontsize=10, color="red")
+        err_msg = f"### 运行错误\n\n```\n{traceback.format_exc()}\n```"
+        # Return placeholders
+        blank = Image.new("RGB", (256, 256), (240, 240, 240))
+        return blank, blank, blank, err_fig, err_msg
+
 # ─── Visualization ──────────────────────────────────────
 def _make_bar_chart(weights: np.ndarray, labels: list[str]) -> plt.Figure:
     zh = [DESCRIPTOR_LABELS_ZH.get(x, x) for x in labels]
@@ -338,7 +351,7 @@ def create_ui():
         model_choice.change(get_model_card, inputs=model_choice, outputs=model_card)
 
         run_btn.click(
-            fn=run_inference,
+            fn=_safe_run,
             inputs=[composite_in, mask_in, model_choice, steps_slider],
             outputs=[comp_view, mask_view, result_out, prompt_chart, info_out],
         )
