@@ -112,11 +112,15 @@ def _load_model(model_name: str, steps: int, device: torch.device):
         return _MODEL_CACHE[key]
 
     preset = MODEL_PRESETS[model_name]
+    ckpt = torch.load(str(_PROJECT_ROOT / preset["checkpoint"]), map_location=device)
+    # Detect n_timestep from checkpoint gammas shape
+    ckpt_n_steps = ckpt["gammas"].shape[0]
+
     with open(str(_PROJECT_ROOT / preset["config"])) as f:
         cfg = json.load(f)
     cfg["path"]["resume_state"] = str(_PROJECT_ROOT / preset["checkpoint"])
-    # Always use 2000 timesteps to match checkpoint, override steps later
-    cfg["model"]["which_networks"][0]["args"]["beta_schedule"]["test"]["n_timestep"] = 2000
+    # Match checkpoint timestep count for loading
+    cfg["model"]["which_networks"][0]["args"]["beta_schedule"]["test"]["n_timestep"] = ckpt_n_steps
 
     ns = preset.get("network")
     if ns is not None:
@@ -129,7 +133,6 @@ def _load_model(model_name: str, steps: int, device: torch.device):
     net = NetCls(**net_args)
     net.set_new_noise_schedule(device=device, phase="test")
 
-    ckpt = torch.load(str(_PROJECT_ROOT / preset["checkpoint"]), map_location=device)
     missing, _ = net.load_state_dict(ckpt, strict=False)
     net = net.to(device)
     net.eval()
