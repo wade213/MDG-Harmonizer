@@ -285,7 +285,7 @@ body {
 }
 .hero {
     padding: 34px 38px; border-radius: 28px; margin-bottom: 22px;
-    background: linear-gradient(135deg, rgba(15,23,42,0.92), rgba(30,64,175,0.82));
+    background: linear-gradient(135deg, rgba(15,23,42,0.88), rgba(30,64,175,0.78)), url('/gradio_api/cdn/assets/bg.jpg') center/cover no-repeat;
     color: white; box-shadow: 0 24px 70px rgba(15,23,42,0.25);
     position: relative; overflow: hidden;
 }
