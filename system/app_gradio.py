@@ -73,14 +73,14 @@ MODEL_PRESETS = {
         "explain": "M-DPR 不依赖 CDP-Net 的独立退化提示构建能力 (~1K 可训参数)。",
         "icon": "🟣",
     },
-    "M-DPR Hybrid": {
+    "M-DPR Hybrid (local)": {
         "config": "config/ablation_A_full_test.json",
-        "checkpoint": "experiments/train_prompt_router_m-dpr_hybrid_260525_163654/checkpoint/5_PromptRouterMDGNetwork.pth",
+        "checkpoint": "experiments/train_prompt_router_m-dpr_descriptor_260525_163654/checkpoint/5_PromptRouterMDGNetwork.pth",
         "network": ["models.network_prompt_router_mdg", "PromptRouterMDGNetwork"],
         "network_kwargs": {"prompt_mode": "hybrid", "prompt_dim": 64, "freeze_backbone": True},
-        "tag": "最终融合模型",
+        "tag": "本地测试模型",
         "path_desc": "CDP-Net Prior + Prompt Router Prior -> Prior Fusion -> Harmonization",
-        "explain": "工作一和工作二的互补融合，适合作为系统默认展示模型。",
+        "explain": "本地 311 张快速验证版。全量训练版需从 AutoDL 下载 checkpoint。",
         "icon": "🔵",
     },
 }
