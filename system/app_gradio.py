@@ -112,15 +112,9 @@ def _load_model(model_name: str, steps: int, device: torch.device):
         return _MODEL_CACHE[key]
 
     preset = MODEL_PRESETS[model_name]
-    ckpt = torch.load(str(_PROJECT_ROOT / preset["checkpoint"]), map_location=device)
-    # Detect n_timestep from checkpoint gammas shape
-    ckpt_n_steps = ckpt["gammas"].shape[0]
-
     with open(str(_PROJECT_ROOT / preset["config"])) as f:
         cfg = json.load(f)
     cfg["path"]["resume_state"] = str(_PROJECT_ROOT / preset["checkpoint"])
-    # Match checkpoint timestep count for loading
-    cfg["model"]["which_networks"][0]["args"]["beta_schedule"]["test"]["n_timestep"] = ckpt_n_steps
 
     ns = preset.get("network")
     if ns is not None:
@@ -130,20 +124,20 @@ def _load_model(model_name: str, steps: int, device: torch.device):
 
     net_args = cfg["model"]["which_networks"][0]["args"]
     NetCls = _resolve_network_class(cfg["model"]["which_networks"][0]["name"])
+
+    # Load checkpoint first to get actual buffer shapes
+    ckpt = torch.load(str(_PROJECT_ROOT / preset["checkpoint"]), map_location=device)
+    # Force n_timestep to match checkpoint
+    ckpt_n = ckpt["gammas"].shape[0]
+    net_args["beta_schedule"]["test"]["n_timestep"] = ckpt_n
+    net_args["beta_schedule"]["train"]["n_timestep"] = ckpt_n
+
     net = NetCls(**net_args)
     net.set_new_noise_schedule(device=device, phase="test")
-
-    # Debug: show remaining key mismatches
-    model_keys = {k: v.shape for k, v in net.state_dict().items() if "gammas" in k or "posterior" in k}
-    ckpt_keys = {k: v.shape for k, v in ckpt.items() if "gammas" in k or "posterior" in k}
-    print(f"DEBUG model gamma shapes: {model_keys}")
-    print(f"DEBUG ckpt gamma shapes: {ckpt_keys}")
-    print(f"DEBUG n_timestep set to: {ckpt_n_steps}")
-
     missing, _ = net.load_state_dict(ckpt, strict=False)
     net = net.to(device)
     net.eval()
-    # Rebuild noise schedule with user-requested step count
+    # Rebuild with user's desired step count
     net.beta_schedule["test"]["n_timestep"] = int(steps)
     net.set_new_noise_schedule(device=device, phase="test")
 
