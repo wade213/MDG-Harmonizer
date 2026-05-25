@@ -133,6 +133,13 @@ def _load_model(model_name: str, steps: int, device: torch.device):
     net = NetCls(**net_args)
     net.set_new_noise_schedule(device=device, phase="test")
 
+    # Debug: show remaining key mismatches
+    model_keys = {k: v.shape for k, v in net.state_dict().items() if "gammas" in k or "posterior" in k}
+    ckpt_keys = {k: v.shape for k, v in ckpt.items() if "gammas" in k or "posterior" in k}
+    print(f"DEBUG model gamma shapes: {model_keys}")
+    print(f"DEBUG ckpt gamma shapes: {ckpt_keys}")
+    print(f"DEBUG n_timestep set to: {ckpt_n_steps}")
+
     missing, _ = net.load_state_dict(ckpt, strict=False)
     net = net.to(device)
     net.eval()
