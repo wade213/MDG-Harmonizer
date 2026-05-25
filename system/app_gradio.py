@@ -56,8 +56,8 @@ DESCRIPTOR_EXPLANATIONS = {
 
 MODEL_PRESETS = {
     "MDG-D (CDP + AFM)": {
-        "config": "config/ablation_D_no_fb_test.json",
-        "checkpoint": "experiments/train_mdg_ablation_D_no_fb_260524_105447/checkpoint/30_MDGNetwork.pth",
+        "config": "config/ablation_A_full_test.json",
+        "checkpoint": "experiments/train_mdg_ablation_A_full_260520_231626/checkpoint/30_MDGNetwork.pth",
         "tag": "工作一基线模型",
         "path_desc": "Composite + Mask -> CDP-Net -> AFM -> Harmonization",
         "explain": "CDP-AFM 轻量退化感知适配算法，当前最优消融 (PSNR 36.40)。",
@@ -337,16 +337,10 @@ def create_ui():
 
         model_choice.change(get_model_card, inputs=model_choice, outputs=model_card)
 
-        _run_event = run_btn.click(
-            fn=lambda: gr.update(interactive=False, value="运行中..."),
-            inputs=None, outputs=run_btn,
-        ).then(
+        run_btn.click(
             fn=run_inference,
             inputs=[composite_in, mask_in, model_choice, steps_slider],
             outputs=[comp_view, mask_view, result_out, prompt_chart, info_out],
-        ).then(
-            fn=lambda: gr.update(interactive=True, value="开始协调 / Run Harmonization"),
-            inputs=None, outputs=run_btn,
         )
 
     return demo
