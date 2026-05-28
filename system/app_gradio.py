@@ -65,15 +65,15 @@ DESCRIPTOR_EXPLANATIONS = {
 MODEL_PRESETS = {
     "MDG-D (CDP + AFM)": {
         "config": "config/ablation_A_full_test.json",
-        "checkpoint": "experiments/train_mdg_ablation_A_full_260520_231626/checkpoint/30_MDGNetwork.pth",
-        "tag": "工作一基线模型",
+        "checkpoint": "experiments/train_mdg_ablation_D_no_fb_260523_224814/checkpoint/30_MDGNetwork.pth",
+        "tag": "工作一最优消融",
         "path_desc": "Composite + Mask -> CDP-Net -> AFM -> Harmonization",
         "explain": "CDP-AFM 轻量退化感知适配算法，当前最优消融 (PSNR 36.40)。",
         "icon": "🟢",
     },
     "M-DPR Router only": {
         "config": "config/ablation_A_full_test.json",
-        "checkpoint": "experiments/train_prompt_router_m-dpr_descriptor_260525_163654/checkpoint/5_PromptRouterMDGNetwork.pth",
+        "checkpoint": "experiments/train_prompt_router_m-dpr_descriptor_260524_145005/checkpoint/5_PromptRouterMDGNetwork.pth",
         "network": ["models.network_prompt_router_mdg", "PromptRouterMDGNetwork"],
         "network_kwargs": {"prompt_mode": "descriptor_only", "prompt_dim": 64, "freeze_backbone": True},
         "tag": "工作二独立模型",
@@ -81,14 +81,14 @@ MODEL_PRESETS = {
         "explain": "M-DPR 不依赖 CDP-Net 的独立退化提示构建能力 (~1K 可训参数)。",
         "icon": "🟣",
     },
-    "M-DPR Hybrid (local)": {
+    "M-DPR Hybrid": {
         "config": "config/ablation_A_full_test.json",
-        "checkpoint": "experiments/train_prompt_router_m-dpr_descriptor_260525_163654/checkpoint/5_PromptRouterMDGNetwork.pth",
+        "checkpoint": "experiments/train_prompt_router_m-dpr_hybrid_260524_145338/checkpoint/5_PromptRouterMDGNetwork.pth",
         "network": ["models.network_prompt_router_mdg", "PromptRouterMDGNetwork"],
         "network_kwargs": {"prompt_mode": "hybrid", "prompt_dim": 64, "freeze_backbone": True},
-        "tag": "本地测试模型",
+        "tag": "最终融合模型",
         "path_desc": "CDP-Net Prior + Prompt Router Prior -> Prior Fusion -> Harmonization",
-        "explain": "本地 311 张快速验证版。全量训练版需从 AutoDL 下载 checkpoint。",
+        "explain": "工作一和工作二的互补融合，适合作为系统默认展示模型。",
         "icon": "🔵",
     },
 }
