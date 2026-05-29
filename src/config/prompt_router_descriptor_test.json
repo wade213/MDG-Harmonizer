@@ -1,5 +1,5 @@
 {
-    "name": "prompt_router_m-dpr_hybrid",
+    "name": "mdg_ablation_A_full",
     "gpu_ids": [
         0
     ],
@@ -11,7 +11,7 @@
         "tb_logger": "tb_logger",
         "results": "results",
         "checkpoint": "checkpoint",
-        "resume_state": "experiments/train_mdg_ablation_A_full_260520_231626/checkpoint/30"
+        "resume_state": "experiments/train_prompt_router_m-dpr_descriptor_260525_163654/checkpoint/5"
     },
     "datasets": {
         "train": {
@@ -21,7 +21,7 @@
                     "HarmonizationTrainDataset"
                 ],
                 "args": {
-                    "data_root": ["./D-Hday2night/composite_images_train/"],
+                    "data_root": "./Hday2night/composite_images_train/",
                     "data_len": -1,
                     "mask_config": {
                         "mask_mode": "hybrid"
@@ -31,7 +31,7 @@
             "dataloader": {
                 "validation_split": 2,
                 "args": {
-                    "batch_size": 1,
+                    "batch_size": 2,
                     "num_workers": 2,
                     "shuffle": true,
                     "pin_memory": true,
@@ -75,8 +75,7 @@
                 "sample_num": 8,
                 "task": "inpainting",
                 "use_amp": false,
-                "gradient_accumulation_steps": 4,
-                "pretrained_label": "MDGNetwork",
+                "gradient_accumulation_steps": 1,
                 "log_loss_breakdown": true
             }
         },
@@ -147,15 +146,13 @@
                         },
                         "test": {
                             "schedule": "linear",
-                            "n_timestep": 1000,
+                            "n_timestep": 50,
                             "linear_start": 0.0001,
                             "linear_end": 0.09
                         }
                     },
-                    "prompt_mode": "hybrid",
-                    "prompt_dim": 64,
-                    "router_hidden": 32,
-                    "use_mlp_router": true
+                    "prompt_mode": "descriptor_only",
+                    "prompt_dim": 64
                 }
             }
         ],
@@ -172,7 +169,7 @@
             {
                 "name": "CosineAnnealingLR",
                 "args": {
-                    "T_max": 50
+                    "T_max": 30
                 }
             }
         ],
@@ -184,9 +181,9 @@
         ]
     },
     "train": {
-        "n_epoch": 5,
+        "n_epoch": 30,
         "n_iter": 1000000.0,
-        "val_epoch": 10000,
+        "val_epoch": 10,
         "save_checkpoint_epoch": 5,
         "log_iter": 20,
         "tensorboard": true

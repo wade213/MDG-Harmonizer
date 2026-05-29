@@ -1,5 +1,5 @@
 {
-    "name": "prompt_router_m-dpr_hybrid",
+    "name": "prompt_router_uniform",
     "gpu_ids": [
         0
     ],
@@ -154,8 +154,7 @@
                     },
                     "prompt_mode": "hybrid",
                     "prompt_dim": 64,
-                    "router_hidden": 32,
-                    "use_mlp_router": true
+                    "use_mlp_router": false
                 }
             }
         ],

@@ -11,7 +11,7 @@
         "tb_logger": "tb_logger",
         "results": "results",
         "checkpoint": "checkpoint",
-        "resume_state": "experiments/train_mdg_ablation_A_full_260523_204007/checkpoint/10"
+        "resume_state": "experiments/train_mdg_ablation_A_full_260520_231626/checkpoint/30"
     },
     "datasets": {
         "train": {
@@ -21,11 +21,7 @@
                     "HarmonizationTrainDataset"
                 ],
                 "args": {
-                    "data_root": [
-                        "./D-Hday2night/composite_images_train/",
-                        "./D-HCOCO/composite_images_train/",
-                        "./D-HFlickr/composite_images_train/"
-                    ],
+                    "data_root": ["./D-Hday2night/composite_images_train/"],
                     "data_len": -1,
                     "mask_config": {
                         "mask_mode": "hybrid"
@@ -35,7 +31,7 @@
             "dataloader": {
                 "validation_split": 2,
                 "args": {
-                    "batch_size": 4,
+                    "batch_size": 1,
                     "num_workers": 2,
                     "shuffle": true,
                     "pin_memory": true,
