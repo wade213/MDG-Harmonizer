@@ -1,8 +1,10 @@
 # MDG-Harmonizer
 
-**本科毕业设计项目** — 在 HCDM 扩散模型框架上做图像 harmonization（图像协调），通过三个轻量模块实现参数高效迁移，在冻结预训练底座的条件下以仅 1% 可训参数（~0.6M）取得接近 HCDM baseline（63M 全训）的结果。
+**本科毕业设计项目** — 在 HCDM 扩散模型框架上做图像 harmonization（图像协调）。包含两个方向：方向一通过 CDP-Net、AFM、FB-Loss 三个轻量模块实现参数高效迁移（~0.6M 可训参数，占 1%）；方向二提出 M-DPR 退化提示路由，仅 ~1K 可训参数即可独立工作。
 
-## 三个核心模块
+## 方向一：参数高效扩散协调
+
+### 三个核心模块
 
 | 模块 | 全称 | 替换对象 | 参数 |
 |------|------|---------|------|
@@ -13,6 +15,21 @@
 ## 核心思路
 
 HCDM 需要 63M 参数全训练、770 epoch。我们冻结预训练 U-Net 底座，只训练三个插件模块（~0.6M 参数，仅占 1%），30 epoch 即接近 baseline 水平。
+
+## 方向二：M-DPR 掩码感知退化提示路由
+
+不依赖 CDP-Net，用 8 维退化描述子（亮度、色偏、饱和度、对比度、边界、模糊、噪声、纹理）+ MLP Router 自动学习 prompt 原型的加权组合，注入 AFM。可训参数仅 ~1K。
+
+| 模块 | 全称 | 作用 |
+|------|------|------|
+| **DegradationDescriptor** | 退化描述子 | 从合成图+掩码计算 8 维退化特征向量 |
+| **MaskAwarePromptRouter** | 掩码感知提示路由 | MLP Router 将描述子映射为 8 个 prompt 原型的加权组合 |
+| **PromptRouterMDGNetwork** | 路由网络 | 支持三种模式：descriptor_only / cdp_only / hybrid |
+
+三种模式：
+- `descriptor_only`：纯 M-DPR，不依赖 CDP-Net，~1K 可训参数
+- `cdp_only`：仅用 CDP-Net（等同方向一）
+- `hybrid`：CDP-Net + Router 融合，用可学习 alpha 加权
 
 ## 实验结果 (D-Hday2night 133张)
 
@@ -43,17 +60,29 @@ HCDM 需要 63M 参数全训练、770 epoch。我们冻结预训练 U-Net 底座
 | DDPM | 200 | 35.81 | -0.8 dB | **5x** |
 | DDPM | 50 | 31.02 | -5.5 dB | 20x |
 
+### M-DPR 退化提示路由实验（DDPM 200步）
+
+| 实验 | 配置 | PSNR | 可训参数 |
+|------|------|------|---------|
+| MDG-D（方向一基线） | CDP + AFM | 36.40 | ~0.6M |
+| **Router only** | descriptor_only | 35.94 | **~1K** |
+| Hybrid | CDP + Router | 35.80 | ~0.6M |
+| Uniform | 平均权重 | 35.38 | ~1K |
+
 ## 项目结构
 
 ```
 src/
 ├── models/                    ← 核心模型代码
-│   ├── cdp_net.py             ← CDP-Net 退化编码器（自写）
-│   ├── afm.py                 ← AFM 自适应调制（自写）
-│   ├── fb_loss.py             ← FB-Loss 损失函数（自写）
-│   ├── network_mdg.py         ← MDGNetwork 扩散网络（自写）
-│   ├── model_mdg.py           ← MDGTrainer 训练器（自写）
-│   ├── guided_diffusion_modules/unet_mdg.py ← MDG UNet（自写）
+│   ├── cdp_net.py             ← CDP-Net 退化编码器（方向一）
+│   ├── afm.py                 ← AFM 自适应调制（方向一）
+│   ├── fb_loss.py             ← FB-Loss 损失函数（方向一）
+│   ├── network_mdg.py         ← MDGNetwork 扩散网络（方向一）
+│   ├── model_mdg.py           ← MDGTrainer 训练器（方向一）
+│   ├── guided_diffusion_modules/unet_mdg.py ← MDG UNet（方向一）
+│   ├── degradation_descriptor.py ← 8维退化描述子（方向二）
+│   ├── degradation_prompt.py  ← DegradationPromptBank + MaskAwarePromptRouter（方向二）
+│   ├── network_prompt_router_mdg.py ← PromptRouterMDGNetwork 三种模式（方向二）
 │   ├── degradation_prior.py   ← 原 HCDM baseline（勿改）
 │   ├── network_modified.py    ← 原 HCDM 网络（勿改）
 │   └── model_rihd.py          ← 原 HCDM 训练器
@@ -62,7 +91,10 @@ src/
 │   ├── ablation_A_full_*.json ← Full MDG（CDP+AFM+FB）
 │   ├── ablation_B_no_cdp_*.json
 │   ├── ablation_C_no_afm_*.json
-│   └── ablation_D_no_fb_*.json
+│   ├── ablation_D_no_fb_*.json
+│   ├── prompt_router_m-dpr_descriptor_*.json ← M-DPR descriptor_only（方向二）
+│   ├── prompt_router_m-dpr_hybrid_*.json     ← M-DPR hybrid（方向二）
+│   └── prompt_router_uniform_*.json          ← uniform baseline（方向二）
 ├── scripts/
 │   ├── compute_baseline_metrics.py  ← PSNR/SSIM 指标计算
 │   ├── infer_single.py       ← 单图推理
@@ -107,6 +139,12 @@ python tools/setup_diharmony4_datasets.py
 ```bash
 # 消融 A (Full MDG)
 python run.py -p train -c config/ablation_A_full_train.json -gpu 0
+
+# M-DPR descriptor_only（方向二，~1K 可训参数）
+python run.py -p train -c config/prompt_router_m-dpr_descriptor_train.json -gpu 0
+
+# M-DPR hybrid（方向二）
+python run.py -p train -c config/prompt_router_m-dpr_hybrid_train.json -gpu 0
 ```
 
 **注意**：配置已设为 fp32 + lr=3e-5（稳定方案）。不要在低显存 GPU 上开 AMP。
