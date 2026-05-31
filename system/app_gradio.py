@@ -278,19 +278,34 @@ def _make_info_text(weights, labels, preset, steps, missing):
 
 # ─── UI ─────────────────────────────────────────────────
 APP_CSS = f"""
-html, body {{
+html,
+body,
+#root {{
     min-height: 100% !important;
     margin: 0 !important;
+    background: transparent !important;
 }}
 
 body {{
-    background:
-        linear-gradient(rgba(248, 250, 252, 0.72), rgba(239, 246, 255, 0.82)),
-        url('{_BG_URL}') center center / cover fixed no-repeat !important;
     color: #0f172a !important;
 }}
 
+#page-bg {{
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+    background:
+        linear-gradient(
+            rgba(248, 250, 252, 0.30),
+            rgba(239, 246, 255, 0.52)
+        ),
+        url('{_BG_URL}') center center / cover no-repeat !important;
+}}
+
 .gradio-container {{
+    position: relative !important;
+    z-index: 1 !important;
     max-width: 1280px !important; margin: auto !important;
     background: transparent !important;
     font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif;
@@ -392,6 +407,7 @@ def create_ui():
     default_model = list(MODEL_PRESETS.keys())[0]
 
     with gr.Blocks(title="MDG-Harmonizer") as demo:
+        gr.HTML('<div id="page-bg"></div>')
         # Hero
         gr.Markdown("""
         <div class="hero">
