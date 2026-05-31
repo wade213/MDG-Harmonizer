@@ -21,6 +21,10 @@ from torchvision import transforms
 
 import gradio as gr
 
+_ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+_BG_PATH = _ASSETS_DIR / "bg.jpg"
+_BG_URL = f"/gradio_api/file={_BG_PATH.as_posix()}"
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent / "src"
 sys.path.insert(0, str(_PROJECT_ROOT))
 
@@ -273,52 +277,52 @@ def _make_info_text(weights, labels, preset, steps, missing):
 """
 
 # ─── UI ─────────────────────────────────────────────────
-APP_CSS = """
-body {
+APP_CSS = f"""
+body {{
     background: linear-gradient(rgba(248, 250, 252, 0.85), rgba(239, 246, 255, 0.92)),
                 #f8fafc !important;
-}
-.gradio-container {
+}}
+.gradio-container {{
     max-width: 1280px !important; margin: auto !important;
     background: transparent !important;
     font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif;
-}
-.hero {
+}}
+.hero {{
     padding: 34px 38px; border-radius: 28px; margin-bottom: 22px;
-    background: linear-gradient(135deg, rgba(15,23,42,0.88), rgba(30,64,175,0.78)), url('/gradio_api/cdn/assets/bg.jpg') center/cover no-repeat;
+    background: linear-gradient(135deg, rgba(15,23,42,0.88), rgba(30,64,175,0.78)), url('{_BG_URL}') center/cover no-repeat;
     color: white; box-shadow: 0 24px 70px rgba(15,23,42,0.25);
     position: relative; overflow: hidden;
-}
-.hero::after {
+}}
+.hero::after {{
     content: ""; position: absolute; right: -80px; top: -80px;
     width: 260px; height: 260px; border-radius: 999px;
     background: rgba(96,165,250,0.28); filter: blur(6px);
-}
-.hero h1 { margin: 0 0 8px 0; font-size: 38px; font-weight: 850; letter-spacing: -0.8px; }
-.hero p { margin: 0; font-size: 16px; color: rgba(255,255,255,0.82); line-height: 1.7; }
-.badge {
+}}
+.hero h1 {{ margin: 0 0 8px 0; font-size: 38px; font-weight: 850; letter-spacing: -0.8px; }}
+.hero p {{ margin: 0; font-size: 16px; color: rgba(255,255,255,0.82); line-height: 1.7; }}
+.badge {{
     display: inline-block; margin: 16px 8px 0 0; padding: 7px 13px;
     border-radius: 999px; background: rgba(255,255,255,0.14);
     border: 1px solid rgba(255,255,255,0.22); color: rgba(255,255,255,0.92);
     font-size: 13px; font-weight: 650; backdrop-filter: blur(10px);
-}
-.glass-card {
+}}
+.glass-card {{
     padding: 18px; border-radius: 24px;
     background: rgba(255,255,255,0.76); border: 1px solid rgba(255,255,255,0.70);
     box-shadow: 0 16px 45px rgba(15,23,42,0.10); backdrop-filter: blur(16px);
-}
-.section-title { font-size: 18px; font-weight: 800; color: #0f172a; margin: 8px 0 12px 0; }
-.subtle-text { color: #64748b; font-size: 13px; line-height: 1.6; }
-.image-frame { border-radius: 20px; overflow: hidden; }
-footer { display: none !important; }
-button.primary, #run_btn {
+}}
+.section-title {{ font-size: 18px; font-weight: 800; color: #0f172a; margin: 8px 0 12px 0; }}
+.subtle-text {{ color: #64748b; font-size: 13px; line-height: 1.6; }}
+.image-frame {{ border-radius: 20px; overflow: hidden; }}
+footer {{ display: none !important; }}
+button.primary, #run_btn {{
     border-radius: 16px !important; min-height: 46px !important; font-weight: 800 !important;
     background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
     border: none !important; box-shadow: 0 14px 28px rgba(37,99,235,0.22) !important;
-}
-button.primary:hover, #run_btn:hover {
+}}
+button.primary:hover, #run_btn:hover {{
     transform: translateY(-1px); box-shadow: 0 18px 36px rgba(37,99,235,0.30) !important;
-}
+}}
 """
 
 def create_ui():
@@ -379,4 +383,4 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--share", action="store_true")
     args = parser.parse_args()
-    create_ui().launch(server_port=args.port, share=args.share, css=APP_CSS)
+    create_ui().launch(server_port=args.port, share=args.share, css=APP_CSS, allowed_paths=[str(_ASSETS_DIR)])
