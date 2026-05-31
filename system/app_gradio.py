@@ -22,7 +22,7 @@ from torchvision import transforms
 import gradio as gr
 
 _ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-_BG_PATH = _ASSETS_DIR / "bj.jpg"
+_BG_PATH = _ASSETS_DIR / "bg.jpg"
 _BG_URL = f"/gradio_api/file={_BG_PATH.as_posix()}"
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent / "src"
@@ -278,14 +278,14 @@ def _make_info_text(weights, labels, preset, steps, missing):
 
 # ─── UI ─────────────────────────────────────────────────
 APP_CSS = f"""
-html, body, #root {{
+html, body {{
   min-height: 100% !important;
   margin: 0 !important;
 }}
 
 body {{
   background: #020617 !important;
-  color: #e5e7eb !important;
+  color: #0f172a !important;
 }}
 
 body::before {{
@@ -294,26 +294,15 @@ body::before {{
   inset: 0;
   z-index: -2;
   background:
-    linear-gradient(rgba(2, 6, 23, 0.55), rgba(2, 6, 23, 0.72)),
+    linear-gradient(rgba(2, 6, 23, 0.45), rgba(2, 6, 23, 0.66)),
     url('{_BG_URL}') center center / cover no-repeat;
-}}
-
-body::after {{
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(circle at 20% 10%, rgba(59, 130, 246, 0.22), transparent 32%),
-    radial-gradient(circle at 85% 25%, rgba(124, 58, 237, 0.18), transparent 30%);
 }}
 
 .gradio-container {{
   max-width: 1280px !important;
   margin: auto !important;
   background: transparent !important;
-  font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif !important;
-  color: #e5e7eb !important;
+  font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif;
 }}
 
 .main, .contain, .wrap, .app {{
@@ -321,28 +310,22 @@ body::after {{
 }}
 
 .hero {{
-  padding: 34px 38px !important;
-  border-radius: 28px !important;
-  margin-bottom: 22px !important;
-  background: rgba(15, 23, 42, 0.86) !important;
+  padding: 34px 38px;
+  border-radius: 28px;
+  margin-bottom: 22px;
+  background: rgba(15, 23, 42, 0.82) !important;
   color: #ffffff !important;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38) !important;
-  border: 1px solid rgba(255, 255, 255, 0.18) !important;
-  backdrop-filter: blur(12px);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(14px);
 }}
 
-.hero h1 {{
-  margin: 0 0 8px 0 !important;
-  font-size: 38px !important;
-  font-weight: 850 !important;
+.hero,
+.hero *,
+.hero h1,
+.hero p,
+.hero span {{
   color: #ffffff !important;
-}}
-
-.hero p {{
-  margin: 0 !important;
-  font-size: 16px !important;
-  color: #dbeafe !important;
-  line-height: 1.7 !important;
 }}
 
 .badge {{
@@ -350,8 +333,8 @@ body::after {{
   margin: 16px 8px 0 0;
   padding: 7px 13px;
   border-radius: 999px;
-  background: rgba(37, 99, 235, 0.36);
-  border: 1px solid rgba(147, 197, 253, 0.42);
+  background: rgba(37, 99, 235, 0.45);
+  border: 1px solid rgba(147, 197, 253, 0.50);
   color: #ffffff !important;
   font-size: 13px;
   font-weight: 700;
@@ -360,73 +343,61 @@ body::after {{
 .glass-card {{
   padding: 18px !important;
   border-radius: 24px !important;
-  background: rgba(15, 23, 42, 0.88) !important;
-  border: 1px solid rgba(148, 163, 184, 0.35) !important;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34) !important;
-  backdrop-filter: blur(14px);
-  color: #e5e7eb !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.82) !important;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.24) !important;
+  backdrop-filter: blur(18px);
+  color: #0f172a !important;
 }}
 
-.glass-card * {{
-  color: #e5e7eb !important;
+.glass-card p,
+.glass-card span,
+.glass-card label,
+.glass-card .label-wrap {{
+  color: #0f172a !important;
 }}
 
 .section-title {{
   font-size: 18px;
   font-weight: 800;
-  color: #ffffff !important;
+  color: #0f172a !important;
   margin: 8px 0 12px 0;
 }}
 
 .subtle-text {{
-  color: #cbd5e1 !important;
+  color: #334155 !important;
   font-size: 13px;
   line-height: 1.6;
 }}
 
-.gradio-container label,
-.gradio-container .label-wrap {{
-  color: #e5e7eb !important;
-  font-weight: 650 !important;
-}}
-
-.gradio-container input,
 .gradio-container textarea,
+.gradio-container input,
 .gradio-container select {{
-  background: rgba(255, 255, 255, 0.96) !important;
   color: #0f172a !important;
 }}
 
-.gradio-container .block,
-.gradio-container .form,
-.gradio-container .panel {{
-  background: rgba(15, 23, 42, 0.72) !important;
-  border-color: rgba(148, 163, 184, 0.30) !important;
+#run_btn,
+#run_btn *,
+#run_btn span {{
+  color: #ffffff !important;
 }}
 
-.gradio-container .image-container,
-.gradio-container .plot-container {{
-  background: rgba(255, 255, 255, 0.96) !important;
-  border-radius: 18px !important;
+#run_btn {{
+  border-radius: 16px !important;
+  min-height: 46px !important;
+  font-weight: 800 !important;
+  background: linear-gradient(135deg, #1d4ed8, #6d28d9) !important;
+  border: none !important;
+  box-shadow: 0 14px 28px rgba(37,99,235,0.32) !important;
 }}
 
-.image-frame {{
-  border-radius: 18px !important;
-  overflow: hidden !important;
+#run_btn:hover {{
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px rgba(37,99,235,0.42) !important;
 }}
 
 footer {{
   display: none !important;
-}}
-
-button.primary, #run_btn {{
-  border-radius: 16px !important;
-  min-height: 46px !important;
-  font-weight: 800 !important;
-  background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
-  color: #ffffff !important;
-  border: none !important;
-  box-shadow: 0 14px 28px rgba(37,99,235,0.35) !important;
 }}
 """
 
