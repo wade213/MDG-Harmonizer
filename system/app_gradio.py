@@ -325,13 +325,14 @@ body {{
     box-shadow: 0 16px 45px rgba(15,23,42,0.10); backdrop-filter: blur(16px);
 }}
 .section-title {{
-    font-size: 20px !important;
+    font-size: 21px !important;
     font-weight: 900 !important;
-    color: #0f172a !important;
+    color: #2563eb !important;
     margin: 4px 0 14px 0 !important;
-    padding-left: 10px;
-    border-left: 5px solid #2563eb;
-    line-height: 1.35;
+    padding-left: 12px !important;
+    border-left: 5px solid #60a5fa !important;
+    line-height: 1.4 !important;
+    letter-spacing: 0.2px !important;
 }}
 .subtle-text {{ color: #64748b; font-size: 13px; line-height: 1.6; }}
 .image-frame {{ border-radius: 20px; overflow: hidden; }}
@@ -363,6 +364,14 @@ button.primary:hover, #run_btn:hover {{
     font-size: 17px !important;
     font-weight: 600 !important;
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+}}
+
+.section-title,
+.section-title *,
+.glass-card .section-title,
+.glass-card .section-title * {{
+    color: #2563eb !important;
+    font-weight: 900 !important;
 }}
 """
 
