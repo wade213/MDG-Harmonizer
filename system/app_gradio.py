@@ -298,8 +298,21 @@ body {{
     width: 260px; height: 260px; border-radius: 999px;
     background: rgba(96,165,250,0.28); filter: blur(6px);
 }}
-.hero h1 {{ margin: 0 0 8px 0; font-size: 38px; font-weight: 850; letter-spacing: -0.8px; }}
-.hero p {{ margin: 0; font-size: 16px; color: rgba(255,255,255,0.82); line-height: 1.7; }}
+.hero h1, .hero h1 *, .hero strong {{
+    margin: 0 0 10px 0;
+    font-size: 42px !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.6px;
+    color: #ffffff !important;
+    text-shadow: 0 3px 14px rgba(0, 0, 0, 0.55);
+}}
+.hero p, .hero p *, .hero span {{
+    font-size: 17px !important;
+    font-weight: 600 !important;
+    color: #f8fafc !important;
+    line-height: 1.75 !important;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}}
 .badge {{
     display: inline-block; margin: 16px 8px 0 0; padding: 7px 13px;
     border-radius: 999px; background: rgba(255,255,255,0.14);
@@ -322,6 +335,26 @@ button.primary, #run_btn {{
 }}
 button.primary:hover, #run_btn:hover {{
     transform: translateY(-1px); box-shadow: 0 18px 36px rgba(37,99,235,0.30) !important;
+}}
+
+.hero,
+.hero * {{
+    color: #ffffff !important;
+}}
+
+.hero h1 {{
+    font-size: 42px !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.6px !important;
+    text-shadow: 0 3px 14px rgba(0, 0, 0, 0.55) !important;
+}}
+
+.hero p,
+.hero span {{
+    color: #f8fafc !important;
+    font-size: 17px !important;
+    font-weight: 600 !important;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
 }}
 """
 
