@@ -22,7 +22,7 @@ from torchvision import transforms
 import gradio as gr
 
 _ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-_BG_PATH = _ASSETS_DIR / "bj.jpg"
+_BG_PATH = _ASSETS_DIR / "bg.jpg"
 _BG_URL = f"/gradio_api/file={_BG_PATH.as_posix()}"
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent / "src"
@@ -278,18 +278,31 @@ def _make_info_text(weights, labels, preset, steps, missing):
 
 # ─── UI ─────────────────────────────────────────────────
 APP_CSS = f"""
-body {{
-    background: linear-gradient(rgba(248, 250, 252, 0.85), rgba(239, 246, 255, 0.92)),
-                #f8fafc !important;
+html, body {{
+    min-height: 100% !important;
+    margin: 0 !important;
 }}
+
+body {{
+    background:
+        linear-gradient(rgba(248, 250, 252, 0.72), rgba(239, 246, 255, 0.82)),
+        url('{_BG_URL}') center center / cover fixed no-repeat !important;
+    color: #0f172a !important;
+}}
+
 .gradio-container {{
     max-width: 1280px !important; margin: auto !important;
     background: transparent !important;
     font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif;
 }}
+
+.main, .contain, .wrap, .app, #component-0 {{
+    background: transparent !important;
+}}
+
 .hero {{
     padding: 34px 38px; border-radius: 28px; margin-bottom: 22px;
-    background: linear-gradient(135deg, rgba(15,23,42,0.88), rgba(30,64,175,0.78)), url('{_BG_URL}') center/cover no-repeat;
+    background: linear-gradient(135deg, rgba(15,23,42,0.88), rgba(30,64,175,0.78));
     color: white; box-shadow: 0 24px 70px rgba(15,23,42,0.25);
     position: relative; overflow: hidden;
 }}
