@@ -22,7 +22,7 @@ from torchvision import transforms
 import gradio as gr
 
 _ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-_BG_PATH = _ASSETS_DIR / "bg.jpg"
+_BG_PATH = _ASSETS_DIR / "bj.jpg"
 _BG_URL = f"/gradio_api/file={_BG_PATH.as_posix()}"
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent / "src"
@@ -278,66 +278,71 @@ def _make_info_text(weights, labels, preset, steps, missing):
 
 # ─── UI ─────────────────────────────────────────────────
 APP_CSS = f"""
-html, body {{
-  min-height: 100%;
+html, body, #root {{
+  min-height: 100% !important;
+  margin: 0 !important;
 }}
 
 body {{
+  background: #020617 !important;
+  color: #e5e7eb !important;
+}}
+
+body::before {{
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
   background:
-    linear-gradient(
-      rgba(8, 15, 30, 0.68),
-      rgba(8, 15, 30, 0.74)
-    ),
-    url('{_BG_URL}') center center / cover fixed no-repeat !important;
-  color: #0f172a !important;
+    linear-gradient(rgba(2, 6, 23, 0.55), rgba(2, 6, 23, 0.72)),
+    url('{_BG_URL}') center center / cover no-repeat;
+}}
+
+body::after {{
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(59, 130, 246, 0.22), transparent 32%),
+    radial-gradient(circle at 85% 25%, rgba(124, 58, 237, 0.18), transparent 30%);
 }}
 
 .gradio-container {{
   max-width: 1280px !important;
   margin: auto !important;
   background: transparent !important;
-  font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif;
-  color: #0f172a !important;
+  font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif !important;
+  color: #e5e7eb !important;
+}}
+
+.main, .contain, .wrap, .app {{
+  background: transparent !important;
 }}
 
 .hero {{
-  padding: 34px 38px;
-  border-radius: 28px;
-  margin-bottom: 22px;
-  background: rgba(15, 23, 42, 0.76) !important;
+  padding: 34px 38px !important;
+  border-radius: 28px !important;
+  margin-bottom: 22px !important;
+  background: rgba(15, 23, 42, 0.86) !important;
   color: #ffffff !important;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(14px);
-  position: relative;
-  overflow: hidden;
-}}
-
-.hero::after {{
-  content: "";
-  position: absolute;
-  right: -80px;
-  top: -80px;
-  width: 260px;
-  height: 260px;
-  border-radius: 999px;
-  background: rgba(96, 165, 250, 0.30);
-  filter: blur(8px);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  backdrop-filter: blur(12px);
 }}
 
 .hero h1 {{
-  margin: 0 0 8px 0;
-  font-size: 38px;
-  font-weight: 850;
-  letter-spacing: -0.8px;
+  margin: 0 0 8px 0 !important;
+  font-size: 38px !important;
+  font-weight: 850 !important;
   color: #ffffff !important;
 }}
 
 .hero p {{
-  margin: 0;
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.90) !important;
-  line-height: 1.7;
+  margin: 0 !important;
+  font-size: 16px !important;
+  color: #dbeafe !important;
+  line-height: 1.7 !important;
 }}
 
 .badge {{
@@ -345,53 +350,69 @@ body {{
   margin: 16px 8px 0 0;
   padding: 7px 13px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.16);
-  border: 1px solid rgba(255,255,255,0.26);
+  background: rgba(37, 99, 235, 0.36);
+  border: 1px solid rgba(147, 197, 253, 0.42);
   color: #ffffff !important;
   font-size: 13px;
-  font-weight: 650;
-  backdrop-filter: blur(10px);
+  font-weight: 700;
 }}
 
 .glass-card {{
   padding: 18px !important;
   border-radius: 24px !important;
-  background: rgba(255, 255, 255, 0.90) !important;
-  border: 1px solid rgba(255, 255, 255, 0.80) !important;
-  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.22) !important;
-  backdrop-filter: blur(18px);
-  color: #0f172a !important;
+  background: rgba(15, 23, 42, 0.88) !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34) !important;
+  backdrop-filter: blur(14px);
+  color: #e5e7eb !important;
+}}
+
+.glass-card * {{
+  color: #e5e7eb !important;
 }}
 
 .section-title {{
   font-size: 18px;
   font-weight: 800;
-  color: #0f172a !important;
+  color: #ffffff !important;
   margin: 8px 0 12px 0;
 }}
 
 .subtle-text {{
-  color: #334155 !important;
+  color: #cbd5e1 !important;
   font-size: 13px;
   line-height: 1.6;
 }}
 
-.image-frame {{
-  border-radius: 20px;
-  overflow: hidden;
-}}
-
 .gradio-container label,
-.gradio-container .label-wrap,
-.gradio-container span,
-.gradio-container p {{
-  color: #0f172a;
+.gradio-container .label-wrap {{
+  color: #e5e7eb !important;
+  font-weight: 650 !important;
 }}
 
-.gradio-container textarea,
 .gradio-container input,
+.gradio-container textarea,
 .gradio-container select {{
+  background: rgba(255, 255, 255, 0.96) !important;
   color: #0f172a !important;
+}}
+
+.gradio-container .block,
+.gradio-container .form,
+.gradio-container .panel {{
+  background: rgba(15, 23, 42, 0.72) !important;
+  border-color: rgba(148, 163, 184, 0.30) !important;
+}}
+
+.gradio-container .image-container,
+.gradio-container .plot-container {{
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-radius: 18px !important;
+}}
+
+.image-frame {{
+  border-radius: 18px !important;
+  overflow: hidden !important;
 }}
 
 footer {{
@@ -402,15 +423,10 @@ button.primary, #run_btn {{
   border-radius: 16px !important;
   min-height: 46px !important;
   font-weight: 800 !important;
-  background: linear-gradient(135deg, #1d4ed8, #6d28d9) !important;
+  background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
   color: #ffffff !important;
   border: none !important;
-  box-shadow: 0 14px 28px rgba(37,99,235,0.28) !important;
-}}
-
-button.primary:hover, #run_btn:hover {{
-  transform: translateY(-1px);
-  box-shadow: 0 18px 36px rgba(37,99,235,0.38) !important;
+  box-shadow: 0 14px 28px rgba(37,99,235,0.35) !important;
 }}
 """
 
@@ -427,7 +443,7 @@ def create_ui():
           <span class="badge">M-DPR 掩码感知 Prompt 路由</span>
           <span class="badge">Prompt 权重可解释分析</span>
         </div>
-        """, elem_classes=["hero"])
+        """)
 
         with gr.Row(equal_height=True):
             with gr.Column(scale=5, elem_classes=["glass-card"]):
