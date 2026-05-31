@@ -22,7 +22,7 @@ from torchvision import transforms
 import gradio as gr
 
 _ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-_BG_PATH = _ASSETS_DIR / "bg.jpg"
+_BG_PATH = _ASSETS_DIR / "bj.jpg"
 _BG_URL = f"/gradio_api/file={_BG_PATH.as_posix()}"
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent / "src"
@@ -278,126 +278,50 @@ def _make_info_text(weights, labels, preset, steps, missing):
 
 # ─── UI ─────────────────────────────────────────────────
 APP_CSS = f"""
-html, body {{
-  min-height: 100% !important;
-  margin: 0 !important;
-}}
-
 body {{
-  background: #020617 !important;
-  color: #0f172a !important;
+    background: linear-gradient(rgba(248, 250, 252, 0.85), rgba(239, 246, 255, 0.92)),
+                #f8fafc !important;
 }}
-
-body::before {{
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  background:
-    linear-gradient(rgba(2, 6, 23, 0.45), rgba(2, 6, 23, 0.66)),
-    url('{_BG_URL}') center center / cover no-repeat;
-}}
-
 .gradio-container {{
-  max-width: 1280px !important;
-  margin: auto !important;
-  background: transparent !important;
-  font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    max-width: 1280px !important; margin: auto !important;
+    background: transparent !important;
+    font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif;
 }}
-
-.main, .contain, .wrap, .app {{
-  background: transparent !important;
-}}
-
 .hero {{
-  padding: 34px 38px;
-  border-radius: 28px;
-  margin-bottom: 22px;
-  background: rgba(15, 23, 42, 0.82) !important;
-  color: #ffffff !important;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(14px);
+    padding: 34px 38px; border-radius: 28px; margin-bottom: 22px;
+    background: linear-gradient(135deg, rgba(15,23,42,0.88), rgba(30,64,175,0.78)), url('{_BG_URL}') center/cover no-repeat;
+    color: white; box-shadow: 0 24px 70px rgba(15,23,42,0.25);
+    position: relative; overflow: hidden;
 }}
-
-.hero,
-.hero *,
-.hero h1,
-.hero p,
-.hero span {{
-  color: #ffffff !important;
+.hero::after {{
+    content: ""; position: absolute; right: -80px; top: -80px;
+    width: 260px; height: 260px; border-radius: 999px;
+    background: rgba(96,165,250,0.28); filter: blur(6px);
 }}
-
+.hero h1 {{ margin: 0 0 8px 0; font-size: 38px; font-weight: 850; letter-spacing: -0.8px; }}
+.hero p {{ margin: 0; font-size: 16px; color: rgba(255,255,255,0.82); line-height: 1.7; }}
 .badge {{
-  display: inline-block;
-  margin: 16px 8px 0 0;
-  padding: 7px 13px;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, 0.45);
-  border: 1px solid rgba(147, 197, 253, 0.50);
-  color: #ffffff !important;
-  font-size: 13px;
-  font-weight: 700;
+    display: inline-block; margin: 16px 8px 0 0; padding: 7px 13px;
+    border-radius: 999px; background: rgba(255,255,255,0.14);
+    border: 1px solid rgba(255,255,255,0.22); color: rgba(255,255,255,0.92);
+    font-size: 13px; font-weight: 650; backdrop-filter: blur(10px);
 }}
-
 .glass-card {{
-  padding: 18px !important;
-  border-radius: 24px !important;
-  background: rgba(255, 255, 255, 0.92) !important;
-  border: 1px solid rgba(255, 255, 255, 0.82) !important;
-  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.24) !important;
-  backdrop-filter: blur(18px);
-  color: #0f172a !important;
+    padding: 18px; border-radius: 24px;
+    background: rgba(255,255,255,0.76); border: 1px solid rgba(255,255,255,0.70);
+    box-shadow: 0 16px 45px rgba(15,23,42,0.10); backdrop-filter: blur(16px);
 }}
-
-.glass-card p,
-.glass-card span,
-.glass-card label,
-.glass-card .label-wrap {{
-  color: #0f172a !important;
+.section-title {{ font-size: 18px; font-weight: 800; color: #0f172a; margin: 8px 0 12px 0; }}
+.subtle-text {{ color: #64748b; font-size: 13px; line-height: 1.6; }}
+.image-frame {{ border-radius: 20px; overflow: hidden; }}
+footer {{ display: none !important; }}
+button.primary, #run_btn {{
+    border-radius: 16px !important; min-height: 46px !important; font-weight: 800 !important;
+    background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
+    border: none !important; box-shadow: 0 14px 28px rgba(37,99,235,0.22) !important;
 }}
-
-.section-title {{
-  font-size: 18px;
-  font-weight: 800;
-  color: #0f172a !important;
-  margin: 8px 0 12px 0;
-}}
-
-.subtle-text {{
-  color: #334155 !important;
-  font-size: 13px;
-  line-height: 1.6;
-}}
-
-.gradio-container textarea,
-.gradio-container input,
-.gradio-container select {{
-  color: #0f172a !important;
-}}
-
-#run_btn,
-#run_btn *,
-#run_btn span {{
-  color: #ffffff !important;
-}}
-
-#run_btn {{
-  border-radius: 16px !important;
-  min-height: 46px !important;
-  font-weight: 800 !important;
-  background: linear-gradient(135deg, #1d4ed8, #6d28d9) !important;
-  border: none !important;
-  box-shadow: 0 14px 28px rgba(37,99,235,0.32) !important;
-}}
-
-#run_btn:hover {{
-  transform: translateY(-1px);
-  box-shadow: 0 18px 36px rgba(37,99,235,0.42) !important;
-}}
-
-footer {{
-  display: none !important;
+button.primary:hover, #run_btn:hover {{
+    transform: translateY(-1px); box-shadow: 0 18px 36px rgba(37,99,235,0.30) !important;
 }}
 """
 
@@ -417,7 +341,7 @@ def create_ui():
         """)
 
         with gr.Row(equal_height=True):
-            with gr.Column(scale=5, elem_classes=["glass-card"]):
+            with gr.Column(scale=5):
                 gr.Markdown('<div class="section-title">1. 输入与推理设置</div>')
                 gr.Markdown('<div class="subtle-text">上传合成图与前景掩码，选择模型后即可完成图像协调推理。</div>')
                 with gr.Row():
@@ -427,24 +351,22 @@ def create_ui():
                 steps_slider = gr.Radio(choices=[50, 100, 200], value=200, label="DDPM 采样步数", info="50 更快，200 质量更稳")
                 run_btn = gr.Button("开始协调 / Run Harmonization", variant="primary", size="lg", elem_id="run_btn")
 
-            with gr.Column(scale=4, elem_classes=["glass-card"]):
+            with gr.Column(scale=4):
                 gr.Markdown('<div class="section-title">2. 当前模型说明</div>')
                 model_card = gr.Markdown(get_model_card(default_model))
 
-        with gr.Column(elem_classes=["glass-card"]):
-            gr.Markdown('<div class="section-title">3. 图像协调结果</div>')
-            with gr.Row():
-                comp_view = gr.Image(label="Composite Input", type="pil", height=300)
-                mask_view = gr.Image(label="Mask Preview", type="pil", height=300)
-                result_out = gr.Image(label="Harmonized Result", type="pil", height=300)
+        gr.Markdown('<div class="section-title">3. 图像协调结果</div>')
+        with gr.Row():
+            comp_view = gr.Image(label="Composite Input", type="pil", height=300)
+            mask_view = gr.Image(label="Mask Preview", type="pil", height=300)
+            result_out = gr.Image(label="Harmonized Result", type="pil", height=300)
 
-        with gr.Column(elem_classes=["glass-card"]):
-            gr.Markdown('<div class="section-title">4. 退化提示分析</div>')
-            with gr.Row(equal_height=True):
-                with gr.Column(scale=5):
-                    prompt_chart = gr.Plot(label="Prompt Weights")
-                with gr.Column(scale=4):
-                    info_out = gr.Markdown("运行 M-DPR 模式后，将在这里显示退化诊断结果。")
+        gr.Markdown('<div class="section-title">4. 退化提示分析</div>')
+        with gr.Row(equal_height=True):
+            with gr.Column(scale=5):
+                prompt_chart = gr.Plot(label="Prompt Weights")
+            with gr.Column(scale=4):
+                info_out = gr.Markdown("运行 M-DPR 模式后，将在这里显示退化诊断结果。")
 
         model_choice.change(get_model_card, inputs=model_choice, outputs=model_card)
 
