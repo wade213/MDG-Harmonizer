@@ -1,6 +1,6 @@
 r"""MDG-Harmonizer 退化感知图像协调与提示分析系统。
 
-支持 MDG-D（工作一）和 M-DPR（工作二）三种模式推理，
+支持 MDG-D（工作一）和 M-DPR（工作二）三种模式协调计算，
 展示退化提示权重可视化与诊断分析。
 """
 
@@ -185,7 +185,7 @@ def run_inference(
     mask_vis = (np.array(mask_pil) > 0).astype(np.uint8) * 255
     mask_vis_pil = Image.fromarray(mask_vis).convert("RGB")
 
-    progress(0.40, desc="扩散推理中...")
+    progress(0.40, desc="扩散协调计算中...")
     with torch.no_grad():
         output, _ = net.restoration(comp_t, y_t=comp_t, y_0=comp_t, mask=mask_t, sample_num=2)
 
@@ -412,7 +412,7 @@ def create_ui():
         gr.Markdown("""
         <div class="hero">
           <h1>MDG-Harmonizer</h1>
-          <p>退化感知图像协调与提示分析系统，支持 CDP-AFM、M-DPR 与融合模型推理。</p>
+          <p>退化感知图像协调与提示分析系统，支持 CDP-AFM、M-DPR 与融合模型协调计算。</p>
           <span class="badge">CDP-AFM 退化感知适配</span>
           <span class="badge">M-DPR 掩码感知 Prompt 路由</span>
           <span class="badge">Prompt 权重可解释分析</span>
@@ -421,8 +421,8 @@ def create_ui():
 
         with gr.Row(equal_height=True):
             with gr.Column(scale=5):
-                gr.Markdown('<div class="section-title">1. 输入与推理设置</div>')
-                gr.Markdown('<div class="subtle-text">上传合成图与前景掩码，选择模型后即可完成图像协调推理。</div>')
+                gr.Markdown('<div class="section-title">1. 输入与协调计算设置</div>')
+                gr.Markdown('<div class="subtle-text">上传合成图与前景掩码，选择模型后即可完成图像协调计算。</div>')
                 with gr.Row():
                     composite_in = gr.Image(label="Composite Image", type="numpy", height=260, elem_classes=["image-frame"])
                     mask_in = gr.Image(label="Foreground Mask", type="numpy", height=260, elem_classes=["image-frame"])
