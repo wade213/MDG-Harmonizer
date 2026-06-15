@@ -1,6 +1,6 @@
-r"""MDG-Harmonizer 退化感知图像协调与提示分析系统。
+r"""MDG-Harmonizer 低质图像合成鲁棒外观调整系统。
 
-支持 MDG-D（工作一）和 M-DPR（工作二）三种模式协调计算，
+支持 CDP-AFM（工作一）和 M-DPR（工作二）三种外观调整模式，
 展示退化提示权重可视化与诊断分析。
 """
 
@@ -70,9 +70,9 @@ MODEL_PRESETS = {
     "MDG-D (CDP + AFM)": {
         "config": "config/ablation_A_full_test.json",
         "checkpoint": "experiments/train_mdg_ablation_D_no_fb_260523_224814/checkpoint/30_MDGNetwork.pth",
-        "tag": "工作一最优消融",
-        "path_desc": "Composite + Mask -> CDP-Net -> AFM -> Harmonization",
-        "explain": "CDP-AFM 轻量退化感知适配算法，当前最优消融 (PSNR 36.40)。",
+        "tag": "退化感知外观调整（最优消融）",
+        "path_desc": "Composite + Mask -> CDP-Net -> AFM -> Adjustment",
+        "explain": "CDP-AFM 轻量退化感知外观调整算法，当前最优消融 (PSNR 36.40)。",
         "icon": "🟢",
     },
     "M-DPR Router only": {
@@ -80,9 +80,9 @@ MODEL_PRESETS = {
         "checkpoint": "experiments/train_prompt_router_m-dpr_descriptor_260524_145005/checkpoint/5_PromptRouterMDGNetwork.pth",
         "network": ["models.network_prompt_router_mdg", "PromptRouterMDGNetwork"],
         "network_kwargs": {"prompt_mode": "descriptor_only", "prompt_dim": 64, "freeze_backbone": True},
-        "tag": "工作二独立模型",
-        "path_desc": "Composite+Mask -> Degradation Descriptor -> Prompt Router -> Harmonization",
-        "explain": "M-DPR 不依赖 CDP-Net 的独立退化提示构建能力 (~1K 可训参数)。",
+        "tag": "独立掩码路由（最小参数模型）",
+        "path_desc": "Composite+Mask -> Descriptor -> Prompt Router -> Adjustment",
+        "explain": "M-DPR 不依赖 CDP-Net 的独立退化提示路由能力 (~1K 可训参数)。",
         "icon": "🟣",
     },
     "M-DPR Hybrid": {
@@ -90,9 +90,9 @@ MODEL_PRESETS = {
         "checkpoint": "experiments/train_prompt_router_m-dpr_hybrid_260524_145338/checkpoint/5_PromptRouterMDGNetwork.pth",
         "network": ["models.network_prompt_router_mdg", "PromptRouterMDGNetwork"],
         "network_kwargs": {"prompt_mode": "hybrid", "prompt_dim": 64, "freeze_backbone": True},
-        "tag": "最终融合模型",
-        "path_desc": "CDP-Net Prior + Prompt Router Prior -> Prior Fusion -> Harmonization",
-        "explain": "工作一和工作二的互补融合，适合作为系统默认展示模型。",
+        "tag": "融合外观调整（双重先验融合）",
+        "path_desc": "CDP-Net Prior + Prompt Router Prior -> Prior Fusion -> Adjustment",
+        "explain": "退化感知与掩码路由的互补融合，适合作为系统默认展示模型。",
         "icon": "🔵",
     },
 }
@@ -185,7 +185,7 @@ def run_inference(
     mask_vis = (np.array(mask_pil) > 0).astype(np.uint8) * 255
     mask_vis_pil = Image.fromarray(mask_vis).convert("RGB")
 
-    progress(0.40, desc="扩散协调计算中...")
+    progress(0.40, desc="外观调整中...")
     with torch.no_grad():
         output, _ = net.restoration(comp_t, y_t=comp_t, y_0=comp_t, mask=mask_t, sample_num=2)
 
@@ -412,40 +412,40 @@ def create_ui():
         gr.Markdown("""
         <div class="hero">
           <h1>MDG-Harmonizer</h1>
-          <p>退化感知图像协调与提示分析系统，支持 CDP-AFM、M-DPR 与融合模型协调计算。</p>
-          <span class="badge">CDP-AFM 退化感知适配</span>
+          <p>低质图像合成中的鲁棒外观调整系统，支持退化感知协调、自适应路由与可解释分析。</p>
+          <span class="badge">CDP-AFM 退化感知外观调整</span>
           <span class="badge">M-DPR 掩码感知 Prompt 路由</span>
-          <span class="badge">Prompt 权重可解释分析</span>
+          <span class="badge">退化提示权重可解释分析</span>
         </div>
         """)
 
         with gr.Row(equal_height=True):
             with gr.Column(scale=5):
-                gr.Markdown('<div class="section-title">1. 输入与协调计算设置</div>')
-                gr.Markdown('<div class="subtle-text">上传合成图与前景掩码，选择模型后即可完成图像协调计算。</div>')
+                gr.Markdown('<div class="section-title">1. 输入与外观调整设置</div>')
+                gr.Markdown('<div class="subtle-text">上传合成图与前景掩码，选择模型后即可完成外观调整。</div>')
                 with gr.Row():
                     composite_in = gr.Image(label="Composite Image", type="numpy", height=260, elem_classes=["image-frame"])
                     mask_in = gr.Image(label="Foreground Mask", type="numpy", height=260, elem_classes=["image-frame"])
                 model_choice = gr.Dropdown(choices=list(MODEL_PRESETS.keys()), value=default_model, label="模型模式")
                 steps_slider = gr.Radio(choices=[50, 100, 200], value=200, label="DDPM 采样步数", info="50 更快，200 质量更稳")
-                run_btn = gr.Button("开始协调 / Run Harmonization", variant="primary", size="lg", elem_id="run_btn")
+                run_btn = gr.Button("开始外观调整 / Run Adjustment", variant="primary", size="lg", elem_id="run_btn")
 
             with gr.Column(scale=4):
                 gr.Markdown('<div class="section-title">2. 当前模型说明</div>')
                 model_card = gr.Markdown(get_model_card(default_model))
 
-        gr.Markdown('<div class="section-title">3. 图像协调结果</div>')
+        gr.Markdown('<div class="section-title">3. 外观调整结果</div>')
         with gr.Row():
             comp_view = gr.Image(label="Composite Input", type="pil", height=300)
             mask_view = gr.Image(label="Mask Preview", type="pil", height=300)
-            result_out = gr.Image(label="Harmonized Result", type="pil", height=300)
+            result_out = gr.Image(label="Adjusted Result", type="pil", height=300)
 
         gr.Markdown('<div class="section-title">4. 退化提示分析</div>')
         with gr.Row(equal_height=True):
             with gr.Column(scale=5):
                 prompt_chart = gr.Plot(label="Prompt Weights")
             with gr.Column(scale=4):
-                info_out = gr.Markdown("运行 M-DPR 模式后，将在这里显示退化诊断结果。")
+                info_out = gr.Markdown("运行 M-DPR 模式后，将在这里显示外观调整诊断结果。")
 
         model_choice.change(get_model_card, inputs=model_choice, outputs=model_card)
 
